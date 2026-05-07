@@ -1,0 +1,538 @@
+{
+  "Novita": {
+    "homepage": "https://novita.ai",
+    "contact_email": "support@novita.ai",
+    "support_url": "https://novita.ai/docs/guides/introduction",
+    "headquarters_city": "San Francisco",
+    "headquarters_country": "US",
+    "company_description": "Novita AI operates an AI and agent cloud platform enabling developers to ship models and agents in minutes while accessing over 200 AI models through unified APIs. The company provides GPU infrastructure, custom model deployment, and isolated agent sandboxes designed for scalable AI inference and autonomous agent execution."
+  },
+  "DeepInfra": {
+    "homepage": "https://deepinfra.com",
+    "contact_email": "info@deepinfra.com",
+    "support_url": "https://docs.deepinfra.com",
+    "headquarters_city": "",
+    "headquarters_country": "US",
+    "company_description": "DeepInfra is an AI inference cloud providing OpenAI-compatible APIs with access to hundreds of open-source models, private GPU deployments, and GPU rental services. The platform offers large language models, vision, embedding, image/video generation, and speech capabilities."
+  },
+  "Google": {
+    "homepage": "https://cloud.google.com/vertex-ai",
+    "contact_email": "",
+    "support_url": "https://cloud.google.com/contact",
+    "headquarters_city": "Mountain View",
+    "headquarters_country": "US",
+    "company_description": "Google Vertex AI (part of Google Cloud's Gemini Enterprise Agent Platform) is a unified machine learning platform that enables organizations to build, deploy, and manage AI models at scale. It provides tools for data preparation, model training, deployment, and monitoring with support for both custom and pre-built AI solutions including generative AI capabilities."
+  },
+  "OpenAI": {
+    "homepage": "https://openai.com",
+    "contact_email": "",
+    "support_url": "https://help.openai.com",
+    "headquarters_city": "San Francisco",
+    "headquarters_country": "US",
+    "company_description": "OpenAI is an AI research and deployment company that develops advanced artificial intelligence systems including GPT language models and DALL-E image generation. The company provides API access to state-of-the-art AI models for developers and organizations worldwide."
+  },
+  "Alibaba": {
+    "homepage": "https://www.alibabacloud.com",
+    "contact_email": "contact.us@alibabacloud.com",
+    "support_url": "https://www.alibabacloud.com/help",
+    "headquarters_city": "Hangzhou",
+    "headquarters_country": "CN",
+    "company_description": "Alibaba Cloud provides cloud infrastructure and digital transformation services, offering compute, database, security, and AI solutions to businesses across multiple regions. The platform delivers comprehensive cloud computing services including machine learning and AI model deployment capabilities."
+  },
+  "AtlasCloud": {
+    "homepage": "https://www.atlascloud.ai",
+    "contact_email": "sales@atlascloud.ai",
+    "support_url": "https://www.atlascloud.ai/docs",
+    "headquarters_city": "New York",
+    "headquarters_country": "US",
+    "company_description": "Atlas Cloud operates the world's first full-modal inference platform for developers, providing unified API access to over 300 AI models spanning LLMs, image, video, and audio generation capabilities through a single integration point. The company is SOC I & II certified and HIPAA compliant with offices in New York City, Silicon Valley, and Calgary."
+  },
+  "Azure": {
+    "homepage": "https://azure.microsoft.com",
+    "contact_email": "",
+    "support_url": "https://learn.microsoft.com/azure",
+    "headquarters_city": "Redmond",
+    "headquarters_country": "US",
+    "company_description": "Microsoft Azure is a comprehensive cloud computing platform offering AI and machine learning services including Azure OpenAI Service, Azure Machine Learning, and specialized AI services for vision, speech, language, and document intelligence. Azure provides end-to-end, scalable infrastructure for building and deploying AI applications with enterprise security."
+  },
+  "Amazon Bedrock": {
+    "homepage": "https://aws.amazon.com/bedrock",
+    "contact_email": "",
+    "support_url": "https://aws.amazon.com/premiumsupport",
+    "headquarters_city": "Seattle",
+    "headquarters_country": "US",
+    "company_description": "Amazon Bedrock is a platform for building generative AI applications and agents at production scale, providing infrastructure and capabilities for organizations to construct AI-powered applications with enterprise security and scalability. It is part of Amazon Web Services' suite of AI and machine learning services."
+  },
+  "Parasail": {
+    "homepage": "https://parasail.io",
+    "contact_email": "",
+    "support_url": "https://docs.parasail.io/parasail-docs",
+    "headquarters_city": "",
+    "headquarters_country": "US",
+    "company_description": "Parasail operates the world's fastest, most cost-efficient AI inference network offering serverless and dedicated GPU deployment options. The platform enables users to run any model from Hugging Face with no rate limits or long-term contracts at significantly reduced costs compared to traditional cloud providers."
+  },
+  "SiliconFlow": {
+    "homepage": "https://siliconflow.com",
+    "contact_email": "",
+    "support_url": "https://docs.siliconflow.com",
+    "headquarters_city": "",
+    "headquarters_country": "SG",
+    "company_description": "SiliconFlow is a lightning-fast AI platform for developers that enables deployment, fine-tuning, and running of 200+ optimized LLMs and multimodal models with simple APIs. The platform provides high-performance inference for state-of-the-art models with a self-developed inference engine and unified OpenAI-compatible interface."
+  },
+  "Venice": {
+    "homepage": "https://venice.ai",
+    "contact_email": "",
+    "support_url": "https://docs.venice.ai",
+    "headquarters_city": "",
+    "headquarters_country": "US",
+    "company_description": "Venice.ai is a privacy-focused AI platform offering unrestricted access to powerful AI models for text, image, character, and video generation. The platform encrypts all content locally in users' browsers without storing data on servers, routing inference requests through decentralized compute providers to ensure user sovereignty and privacy."
+  },
+  "Together": {
+    "homepage": "https://www.together.ai",
+    "contact_email": "",
+    "support_url": "https://docs.together.ai",
+    "headquarters_city": "New York",
+    "headquarters_country": "US",
+    "company_description": "Together AI operates a full-stack AI native cloud platform providing model inference, fine-tuning capabilities, and GPU cluster access powered by cutting-edge systems research. The company enables teams to ship faster, scale reliably, and achieve superior unit economics through open-source collaboration and research-driven optimization techniques."
+  },
+  "Mistral": {
+    "homepage": "https://mistral.ai",
+    "contact_email": "press@mistral.ai",
+    "support_url": "https://help.mistral.ai",
+    "headquarters_city": "Paris",
+    "headquarters_country": "FR",
+    "company_description": "Mistral AI is a French artificial intelligence company that develops frontier AI models and platforms including customizable LLMs, assistants, agents, and services. The company enables organizations to deploy AI systems across various environments while maintaining data control and sovereignty."
+  },
+  "Google AI Studio": {
+    "homepage": "https://aistudio.google.com",
+    "contact_email": "",
+    "support_url": "https://ai.google.dev",
+    "headquarters_city": "Mountain View",
+    "headquarters_country": "US",
+    "company_description": "Google AI Studio is Google's platform for experimenting with and building applications using generative AI models, particularly the Gemini family of models. The platform provides developers with a straightforward interface to prototype with AI capabilities and integrate them into applications through the Gemini API."
+  },
+  "NextBit": {
+    "homepage": "https://nextbit.ai",
+    "contact_email": "",
+    "support_url": "",
+    "headquarters_city": "",
+    "headquarters_country": "",
+    "company_description": "NextBit is an AI inference provider offering access to multiple language models through a unified API interface. Limited public information is available about the company's operations and corporate structure."
+  },
+  "xAI": {
+    "homepage": "https://x.ai",
+    "contact_email": "",
+    "support_url": "https://docs.x.ai",
+    "headquarters_city": "Palo Alto",
+    "headquarters_country": "US",
+    "company_description": "xAI is an artificial intelligence company founded by Elon Musk, developing Grok, an AI model designed to deliver truthful and insightful answers. The company provides multiple AI capabilities including text generation, voice services, and image/video creation through their API platform."
+  },
+  "Anthropic": {
+    "homepage": "https://www.anthropic.com",
+    "contact_email": "",
+    "support_url": "https://support.claude.com",
+    "headquarters_city": "San Francisco",
+    "headquarters_country": "US",
+    "company_description": "Anthropic is an AI safety and research company that develops advanced AI systems with an emphasis on safety, security, and responsible deployment. The company is best known for creating Claude, a family of large language models designed to be helpful, harmless, and honest."
+  },
+  "Cloudflare": {
+    "homepage": "https://www.cloudflare.com",
+    "contact_email": "",
+    "support_url": "https://developers.cloudflare.com/workers-ai",
+    "headquarters_city": "San Francisco",
+    "headquarters_country": "US",
+    "company_description": "Cloudflare Workers AI is a serverless platform that enables developers to run machine learning models on GPUs distributed across Cloudflare's global network. The service provides access to 50+ open-source models for image classification, text generation, and object detection with automatic scaling and zero cold starts through a pay-as-you-go pricing model."
+  },
+  "Nebius": {
+    "homepage": "https://nebius.com",
+    "contact_email": "",
+    "support_url": "https://docs.nebius.com",
+    "headquarters_city": "Amsterdam",
+    "headquarters_country": "NL",
+    "company_description": "Nebius is a cloud infrastructure company optimized for artificial intelligence workloads, providing access to thousands of NVIDIA GPUs with managed services for model training, fine-tuning, and inference. The platform emphasizes democratizing AI infrastructure through pre-configured clusters and expert support for machine learning practitioners."
+  },
+  "WandB": {
+    "homepage": "https://wandb.ai",
+    "contact_email": "support@wandb.com",
+    "support_url": "https://docs.wandb.ai",
+    "headquarters_city": "San Francisco",
+    "headquarters_country": "US",
+    "company_description": "Weights & Biases (WandB) is an AI developer platform powering the generative AI industry with tools for training foundation models, fine-tuning, model management, and building applications using frontier language models. The platform provides comprehensive MLOps capabilities including experiment tracking, model versioning, and hosted inference services."
+  },
+  "Chutes": {
+    "homepage": "https://chutes.ai",
+    "contact_email": "support@chutes.ai",
+    "support_url": "https://chutes.ai/contact",
+    "headquarters_city": "",
+    "headquarters_country": "US",
+    "company_description": "Chutes is a decentralized, open-source serverless AI compute infrastructure enabling deployment and scaling of open-source models with GPU resources for production workloads. The platform provides global GPU access for running AI models at scale."
+  },
+  "Phala": {
+    "homepage": "https://phala.com",
+    "contact_email": "",
+    "support_url": "https://docs.phala.com",
+    "headquarters_city": "Newark",
+    "headquarters_country": "US",
+    "company_description": "Phala offers confidential AI cloud services through hardware-backed TEEs (Trusted Execution Environments), enabling users to run agents, LLMs, and GPU jobs while maintaining data privacy and proving runtime integrity. The platform provides private execution with verifiable results and 24/7 enterprise support."
+  },
+  "Z.AI": {
+    "homepage": "https://chat.z.ai",
+    "contact_email": "",
+    "support_url": "",
+    "headquarters_city": "",
+    "headquarters_country": "SG",
+    "company_description": "Z.AI is an advanced AI assistant powered by open-source GLM models offering text generation, reasoning capabilities, and deep research functionality tailored for both English and Chinese users. The platform is developed by Zhipu AI with a focus on multilingual AI capabilities."
+  },
+  "Minimax": {
+    "homepage": "https://www.minimaxi.com",
+    "contact_email": "api@minimaxi.com",
+    "support_url": "https://platform.minimaxi.com/docs",
+    "headquarters_city": "Singapore",
+    "headquarters_country": "SG",
+    "company_description": "MiniMax is a leading AI technology company developing multimodal large language models for global users, serving over 200 countries and regions. Founded in December 2021, the company specializes in general-purpose artificial intelligence with a mission to co-create intelligence with all people."
+  },
+  "SambaNova": {
+    "homepage": "https://sambanova.ai",
+    "contact_email": "",
+    "support_url": "https://sambanova.ai/support",
+    "headquarters_city": "Palo Alto",
+    "headquarters_country": "US",
+    "company_description": "SambaNova develops AI inference hardware and software with custom dataflow technology and three-tier memory architecture for fast, energy-efficient AI model deployment. The company offers SambaCloud, SambaStack, and the SN50 RDU chip for enterprise AI infrastructure."
+  },
+  "Fireworks": {
+    "homepage": "https://fireworks.ai",
+    "contact_email": "",
+    "support_url": "https://docs.fireworks.ai",
+    "headquarters_city": "San Mateo",
+    "headquarters_country": "US",
+    "company_description": "Fireworks AI is an inference platform for generative AI created by the founders of PyTorch, providing the fastest AI cloud with support for 400+ open-source models. The platform enables users to build and deploy AI applications from experimentation to production with high performance and reliability."
+  },
+  "Groq": {
+    "homepage": "https://groq.com",
+    "contact_email": "",
+    "support_url": "https://console.groq.com/docs/overview",
+    "headquarters_city": "Mountain View",
+    "headquarters_country": "US",
+    "company_description": "Groq delivers fast, low-cost inference through its purpose-built LPU (Language Processing Unit) architecture, enabling quick and affordable AI model operations. The company operates data centers across four global regions providing high-performance AI inference."
+  },
+  "Friendli": {
+    "homepage": "https://friendli.ai",
+    "contact_email": "contact@friendli.ai",
+    "support_url": "https://friendli.ai/docs",
+    "headquarters_city": "San Francisco",
+    "headquarters_country": "US",
+    "company_description": "FriendliAI empowers organizations to harness the full potential of their generative AI models with ease and cost-efficiency. The platform serves as an inference cloud for deploying frontier AI models with optimized performance, with headquarters in San Francisco and a hub in Seoul, Korea."
+  },
+  "AkashML": {
+    "homepage": "https://akashml.com",
+    "contact_email": "",
+    "support_url": "",
+    "headquarters_city": "",
+    "headquarters_country": "US",
+    "company_description": "AkashML is a high-performance, low-latency AI inference service built on Akash Network, providing decentralized AI inference that is faster, cheaper, and more transparent than traditional cloud services. The platform offers pre-configured templates for popular models like Llama-3 and DeepSeek."
+  },
+  "DekaLLM": {
+    "homepage": "",
+    "contact_email": "",
+    "support_url": "",
+    "headquarters_city": "",
+    "headquarters_country": "ID",
+    "company_description": "DekaLLM is an Indonesian AI infrastructure provider offering language model inference services. Limited public information is available about the company's operations and website."
+  },
+  "Baidu": {
+    "homepage": "https://cloud.baidu.com",
+    "contact_email": "",
+    "support_url": "https://cloud.baidu.com/doc/support/index.html",
+    "headquarters_city": "Beijing",
+    "headquarters_country": "CN",
+    "company_description": "Baidu Intelligent Cloud provides cloud-AI integration services including the ERNIE large language model series, AI computing platforms, and enterprise AI applications. The platform offers 7x24 hour support with agent-driven one-stop enterprise services across industries, operating globally with 3,300+ CDN nodes."
+  },
+  "Nvidia": {
+    "homepage": "https://www.nvidia.com/en-us/ai/",
+    "contact_email": "",
+    "support_url": "https://www.nvidia.com/en-us/data-center/products/ai-enterprise-suite/support/",
+    "headquarters_city": "Santa Clara",
+    "headquarters_country": "US",
+    "company_description": "NVIDIA provides artificial intelligence computing leadership with solutions spanning accelerated infrastructure, enterprise AI software, and advanced AI models. The company offers platforms like AI Enterprise, NeMo for agent lifecycle management, and NIM microservices for streamlined model deployment."
+  },
+  "Morph": {
+    "homepage": "https://morph.so",
+    "contact_email": "",
+    "support_url": "",
+    "headquarters_city": "",
+    "headquarters_country": "US",
+    "company_description": "Morph Labs provides infrastructure for AI agents with instant environment branching and burst scalability. The platform enables rapid deployment and scaling of AI applications with dynamic resource allocation."
+  },
+  "GMICloud": {
+    "homepage": "https://gmicloud.ai",
+    "contact_email": "",
+    "support_url": "https://docs.gmicloud.ai",
+    "headquarters_city": "",
+    "headquarters_country": "US",
+    "company_description": "GMICloud is an AI-native inference cloud built for production AI, combining serverless scaling and dedicated GPU infrastructure with predictable performance and cost. The platform provides enterprise-grade AI inference capabilities with comprehensive documentation."
+  },
+  "Xiaomi": {
+    "homepage": "https://www.mi.com",
+    "contact_email": "",
+    "support_url": "",
+    "headquarters_city": "Beijing",
+    "headquarters_country": "CN",
+    "company_description": "Xiaomi ventured into large-scale AI models with the introduction of Xiaomi MiMo, marking a shift toward deep AI integration in products. The company released the MiMo-7B reasoning model and MiMo-V2-Pro trillion-parameter large language model, with plans to invest at least $8.7 billion in AI over three years."
+  },
+  "Inceptron": {
+    "homepage": "",
+    "contact_email": "",
+    "support_url": "",
+    "headquarters_city": "",
+    "headquarters_country": "SE",
+    "company_description": "Inceptron is a Swedish AI infrastructure provider offering model inference services. Limited public information is available about the company's website and operations."
+  },
+  "Perplexity": {
+    "homepage": "https://www.perplexity.ai",
+    "contact_email": "",
+    "support_url": "",
+    "headquarters_city": "",
+    "headquarters_country": "US",
+    "company_description": "Perplexity AI is an AI-powered search and answer engine that combines large language models with web search to provide accurate, sourced answers to questions. The company provides both consumer and API access to its AI search capabilities."
+  },
+  "Mancer 2": {
+    "homepage": "https://mancer.tech",
+    "contact_email": "support@mail.mancer.tech",
+    "support_url": "",
+    "headquarters_city": "Paris",
+    "headquarters_country": "FR",
+    "company_description": "Mancer operates as a large language model inferencing service offering unfiltered LLM access on high-performance infrastructure with both free and paid model options. The platform provides community support via Discord for developers."
+  },
+  "BaseTen": {
+    "homepage": "https://baseten.co",
+    "contact_email": "",
+    "support_url": "https://docs.baseten.co",
+    "headquarters_city": "San Francisco",
+    "headquarters_country": "US",
+    "company_description": "Baseten is the platform for high-performance inference that enables organizations to serve open-source, custom, and fine-tuned AI models on infrastructure purpose-built for high-performance inference at massive scale. The platform provides enterprise-grade AI deployment capabilities."
+  },
+  "Seed": {
+    "homepage": "https://seed.run",
+    "contact_email": "contact@seed.run",
+    "support_url": "help@seed.run",
+    "headquarters_city": "San Francisco",
+    "headquarters_country": "US",
+    "company_description": "Seed offers custom deployment infrastructure for serverless applications with incremental deploys up to 100x faster and zero-config CI/CD pipelines. Originally founded by the Serverless Stack team in San Francisco, the company now runs distributed teams across the globe."
+  },
+  "AionLabs": {
+    "homepage": "https://aionlabs.ai",
+    "contact_email": "",
+    "support_url": "",
+    "headquarters_city": "",
+    "headquarters_country": "IL",
+    "company_description": "AionLabs provides powerful AI designed for creative and production workloads accessible via OpenAI-compatible API, plus email agents that autonomously read, reason, and respond. The company focuses on enterprise AI automation capabilities."
+  },
+  "Cerebras": {
+    "homepage": "https://cerebras.ai",
+    "contact_email": "info@cerebras.ai",
+    "support_url": "https://status.cerebras.ai",
+    "headquarters_city": "Sunnyvale",
+    "headquarters_country": "US",
+    "company_description": "Cerebras provides AI infrastructure focused on fast inference and training using the Cerebras Wafer-Scale Engine, purpose-built for ultra-fast AI. The platform offers cloud, dedicated, and on-premises deployment options for enterprise AI workloads."
+  },
+  "Cohere": {
+    "homepage": "https://cohere.com",
+    "contact_email": "support@cohere.com",
+    "support_url": "https://support.cohere.com",
+    "headquarters_city": "Toronto",
+    "headquarters_country": "CA",
+    "company_description": "Cohere is an enterprise AI company founded in 2019 that provides private, secure, customizable AI solutions. The company offers generative models, retrieval systems, and workplace AI platforms designed to keep your data on your infrastructure with full control."
+  },
+  "Io Net": {
+    "homepage": "https://io.net",
+    "contact_email": "",
+    "support_url": "",
+    "headquarters_city": "",
+    "headquarters_country": "US",
+    "company_description": "io.net is a decentralized GPU network and DePIN infrastructure platform providing on-demand AI compute, GPU cloud clusters, and AI inference APIs. The platform enables access to distributed computing resources for AI workloads."
+  },
+  "OpenInference": {
+    "homepage": "",
+    "contact_email": "",
+    "support_url": "",
+    "headquarters_city": "",
+    "headquarters_country": "US",
+    "company_description": "OpenInference is an AI inference provider with limited public information available. The company appears to offer model inference services through a distributed infrastructure."
+  },
+  "Poolside": {
+    "homepage": "https://poolside.ai",
+    "contact_email": "",
+    "support_url": "https://docs.poolside.ai",
+    "headquarters_city": "",
+    "headquarters_country": "US",
+    "company_description": "Poolside builds foundation models for long horizon work starting with software agents. The company focuses on frontier AI development for enterprise environments with models designed for complex, multi-step tasks."
+  },
+  "DeepSeek": {
+    "homepage": "https://www.deepseek.com",
+    "contact_email": "service@deepseek.com",
+    "support_url": "https://api-docs.deepseek.com",
+    "headquarters_city": "Hangzhou",
+    "headquarters_country": "CN",
+    "company_description": "DeepSeek is a research organization founded in 2023, specializing in developing world-leading foundational AI models and technology. The company focuses on general-purpose artificial intelligence research and provides API access to its models."
+  },
+  "Moonshot AI": {
+    "homepage": "https://www.moonshot.cn",
+    "contact_email": "",
+    "support_url": "https://appsupport.moonshot.cn",
+    "headquarters_city": "Sydney",
+    "headquarters_country": "AU",
+    "company_description": "Moonshot AI develops advanced AI models and products, with their main offering Kimi seeking the optimal solution for converting energy into intelligence. The company operates from Sydney, Australia, serving global markets."
+  },
+  "Arcee AI": {
+    "homepage": "https://www.arcee.ai",
+    "contact_email": "support@arcee.ai",
+    "support_url": "https://docs.arcee.ai",
+    "headquarters_city": "San Francisco",
+    "headquarters_country": "US",
+    "company_description": "Arcee AI is a US-based Open Intelligence Lab that has released three frontier models in six months, all open-weight. The company emphasizes models with real benchmarks, continuous learning capabilities, and cost-effective scaling for enterprise use."
+  },
+  "StreamLake": {
+    "homepage": "https://streamlake.com",
+    "contact_email": "",
+    "support_url": "",
+    "headquarters_city": "",
+    "headquarters_country": "CN",
+    "company_description": "StreamLake is Kuaishou's B2B video cloud platform delivering advanced audio-video AI solutions. The platform provides leading video and audio processing capabilities leveraging AI technology for enterprise applications."
+  },
+  "Reka": {
+    "homepage": "https://reka.ai",
+    "contact_email": "",
+    "support_url": "https://docs.reka.ai",
+    "headquarters_city": "Sunnyvale",
+    "headquarters_country": "US",
+    "company_description": "Reka is an AI model builder with a focus on multimodal and efficiency, regularly open sourcing technology and offering enterprise deployments of agentic platforms. The company specializes in building advanced multimodal AI systems."
+  },
+  "ModelRun": {
+    "homepage": "",
+    "contact_email": "",
+    "support_url": "",
+    "headquarters_city": "",
+    "headquarters_country": "US",
+    "company_description": "ModelRun is an AI model inference provider with limited public information available. The company offers infrastructure for running AI models at scale."
+  },
+  "Liquid": {
+    "homepage": "https://liquid.ai",
+    "contact_email": "press@liquid.ai",
+    "support_url": "https://www.liquid.ai/contact",
+    "headquarters_city": "Cambridge",
+    "headquarters_country": "US",
+    "company_description": "Liquid AI develops ultra-efficient multimodal AI models optimized for CPUs, GPUs, and NPUs, enabling privacy-critical, low-latency applications on-device, in the cloud, or hybrid. The company focuses on efficient AI architectures for edge and cloud deployment."
+  },
+  "Relace": {
+    "homepage": "https://relace.ai",
+    "contact_email": "info@relace.ai",
+    "support_url": "https://docs.relace.ai/docs/introduction",
+    "headquarters_city": "",
+    "headquarters_country": "US",
+    "company_description": "Relace provides purpose-built AI models and scalable infrastructure for coding agents, offering ultra-fast code retrieval, merging, and autonomous workflows. The platform specializes in AI-powered development tools and infrastructure."
+  },
+  "Infermatic": {
+    "homepage": "https://infermatic.ai",
+    "contact_email": "",
+    "support_url": "",
+    "headquarters_city": "",
+    "headquarters_country": "US",
+    "company_description": "Infermatic.ai provides streamlined, private, secure access to the best large language models in one seamless platform, with free and low-cost flat-rate plans. The platform offers unified access to multiple AI models with privacy guarantees."
+  },
+  "Inflection": {
+    "homepage": "https://inflection.ai",
+    "contact_email": "",
+    "support_url": "https://developers.inflection.ai",
+    "headquarters_city": "Palo Alto",
+    "headquarters_country": "US",
+    "company_description": "Inflection AI pioneers the future with human-centered, emotionally intelligent AI that transforms interactions from transactional to relational. The company develops Pi, an AI assistant focused on empathetic and conversational interactions."
+  },
+  "Stealth": {
+    "homepage": "",
+    "contact_email": "",
+    "support_url": "",
+    "headquarters_city": "",
+    "headquarters_country": "",
+    "company_description": "Stealth is an AI infrastructure provider operating in stealth mode with limited public information available. The company appears to be in early-stage development with minimal public presence."
+  },
+  "Ambient": {
+    "homepage": "https://ambient.ai",
+    "contact_email": "sales@ambient.ai",
+    "support_url": "",
+    "headquarters_city": "Redwood City",
+    "headquarters_country": "US",
+    "company_description": "Ambient.ai transforms physical security with computer vision intelligence, empowering security teams with automated threat detection and visual verification. The company develops the proprietary Ambient Pulsar reasoning Vision-Language Model for real-time security applications."
+  },
+  "Inception": {
+    "homepage": "",
+    "contact_email": "",
+    "support_url": "",
+    "headquarters_city": "",
+    "headquarters_country": "",
+    "company_description": "Inception is an AI infrastructure provider with limited public information available. The company appears to offer AI model inference services."
+  },
+  "Mara": {
+    "homepage": "",
+    "contact_email": "",
+    "support_url": "",
+    "headquarters_city": "",
+    "headquarters_country": "US",
+    "company_description": "Mara is an AI infrastructure provider with limited public information available. The company appears to be a newer entrant in the AI inference space."
+  },
+  "Ionstream": {
+    "homepage": "https://ionstream.ai",
+    "contact_email": "",
+    "support_url": "https://ionstream.ai/contact",
+    "headquarters_city": "The Woodlands",
+    "headquarters_country": "US",
+    "company_description": "Ionstream is a premier GPU cloud for AI offering high-performance NVIDIA GPU infrastructure on-demand and at scale for AI, machine learning, rendering, and more. The platform provides a 20-year track record with 99.999% uptime guarantee."
+  },
+  "StepFun": {
+    "homepage": "https://stepfun.com",
+    "contact_email": "",
+    "support_url": "",
+    "headquarters_city": "",
+    "headquarters_country": "CN",
+    "company_description": "StepFun AI is an intelligent personal productivity assistant that helps with knowledge acquisition, information lookup, language learning, creative writing, and code development. The platform provides AI-powered assistance for various professional and creative tasks."
+  },
+  "Upstage": {
+    "homepage": "https://upstage.ai",
+    "contact_email": "contact@upstage.ai",
+    "support_url": "https://support.upstage.ai",
+    "headquarters_city": "Seoul",
+    "headquarters_country": "KR",
+    "company_description": "Upstage builds powerful large language models and document processing engines to transform workflows and empower leading businesses. The company specializes in enterprise AI solutions with headquarters at the Korea Science and Technology Center in Gangnam-gu."
+  },
+  "Clarifai": {
+    "homepage": "https://www.clarifai.com",
+    "contact_email": "sales@clarifai.com",
+    "support_url": "support@clarifai.com",
+    "headquarters_city": "Wilmington",
+    "headquarters_country": "US",
+    "company_description": "Clarifai is the leading platform for compute orchestration that enables developers and teams to create, share, and run enterprise AI at scale. Founded in 2013 by Matthew Zeiler, Ph.D., the platform supports the complete AI development lifecycle with the fastest AI inference and reasoning on GPUs."
+  },
+  "AI21": {
+    "homepage": "https://www.ai21.com",
+    "contact_email": "",
+    "support_url": "https://www.ai21.com/contact-sales",
+    "headquarters_city": "Tel Aviv",
+    "headquarters_country": "IL",
+    "company_description": "AI21 Labs builds AI systems for the enterprise with foundation models and AI systems that power critical enterprise workflows with accurate, reliable, and scalable solutions. The company focuses on delivering production-grade AI for business applications."
+  },
+  "Switchpoint": {
+    "homepage": "",
+    "contact_email": "",
+    "support_url": "",
+    "headquarters_city": "",
+    "headquarters_country": "US",
+    "company_description": "Switchpoint is an AI infrastructure provider with limited public information available. The company appears to offer AI model inference and deployment services."
+  },
+  "Featherless": {
+    "homepage": "https://featherless.ai",
+    "contact_email": "",
+    "support_url": "https://featherless.ai/docs/overview",
+    "headquarters_city": "",
+    "headquarters_country": "US",
+    "company_description": "Featherless is a serverless LLM hosting platform providing instant access to 30,000+ open-source models through a single API. Built for reliability, performance, and predictable flat-rate pricing, the platform offers comprehensive model access with Discord community support."
+  }
+}
