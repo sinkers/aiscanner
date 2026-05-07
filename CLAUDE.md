@@ -85,10 +85,11 @@ Industry standard is per-million tokens. Always multiply by 1,000,000 for displa
 
 ### Standalone HTML Generation
 
-Don't manually edit `index_standalone.html`. Regenerate it:
+Don't manually edit `index_standalone.html`. Always regenerate it after updating `infrastructure_provider_map.json`:
 
 ```python
 import json
+import re
 
 with open('infrastructure_provider_map.json') as f:
     data = json.load(f)
@@ -96,18 +97,31 @@ with open('infrastructure_provider_map.json') as f:
 with open('index.html') as f:
     html = f.read()
 
-# Replace fetch() with embedded data
+# Replace the entire loadData function's fetch logic with embedded data
 html = html.replace(
-    'const response = await fetch(\'infrastructure_provider_map.json\');'
-    '                infraData = await response.json();',
-    f'infraData = {json.dumps(data)};'
+    '''async function loadData() {
+            try {
+                const response = await fetch('infrastructure_provider_map.json');
+                infraData = await response.json();
+                initializeUI();
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('providers-table-container').innerHTML =
+                    '<div class="no-results">Error loading data. Make sure infrastructure_provider_map.json exists in the same directory.<br><br>If opening directly as a file, use index_standalone.html instead or run a web server.</div>';
+            }
+        }''',
+    '''async function loadData() {
+            // Data embedded in standalone version
+            infraData = ''' + json.dumps(data) + ''';
+            initializeUI();
+        }'''
 )
 
 with open('index_standalone.html', 'w') as f:
     f.write(html)
 ```
 
-The standalone version embeds ~1MB of JSON directly in the HTML.
+**Critical**: The replacement must match the exact structure in `index.html` including the try/catch block. The standalone version embeds ~780KB of JSON directly in the HTML.
 
 ## Common Commands
 
@@ -129,16 +143,30 @@ with open('infrastructure_provider_map.json') as f:
     data = json.load(f)
 with open('index.html') as f:
     html = f.read()
-import re
-html = re.sub(
-    r'const response = await fetch.*?infraData = await response\.json\(\);',
-    f'infraData = {json.dumps(data)};',
-    html,
-    flags=re.DOTALL
+
+# Replace the entire loadData function - must match exact structure
+html = html.replace(
+    '''async function loadData() {
+            try {
+                const response = await fetch('infrastructure_provider_map.json');
+                infraData = await response.json();
+                initializeUI();
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('providers-table-container').innerHTML =
+                    '<div class="no-results">Error loading data. Make sure infrastructure_provider_map.json exists in the same directory.<br><br>If opening directly as a file, use index_standalone.html instead or run a web server.</div>';
+            }
+        }''',
+    '''async function loadData() {
+            // Data embedded in standalone version
+            infraData = ''' + json.dumps(data) + ''';
+            initializeUI();
+        }'''
 )
+
 with open('index_standalone.html', 'w') as f:
     f.write(html)
-print("✅ Generated index_standalone.html")
+print(f"✅ Generated index_standalone.html ({len(html):,} bytes)")
 EOF
 ```
 
@@ -289,12 +317,12 @@ From DATA_SOURCES.md philosophy: "Better to show Unknown than incorrect data"
 
 ## API Token
 
-The OpenRouter API token is hardcoded in `map_infrastructure_providers.py`:
+The OpenRouter API token is hardcoded in `map_infrastructure_providers.py` line 21:
 ```python
 API_TOKEN = "REDACTED_OPENROUTER_TOKEN_1"
 ```
 
-This appears to be a project-specific token. If API calls fail with 401, this token may need updating.
+**Important**: This token is visible in the code. If API calls fail with 401 Unauthorized, update this token. The token is required for fetching model endpoints but not for the basic models/providers API calls.
 
 ## Performance Considerations
 
@@ -304,12 +332,16 @@ This appears to be a project-specific token. If API calls fail with 401, this to
 - Browser must parse and render large dataset
 
 ### Browser Caching Issues
-When updating data:
-1. Regenerate `index_standalone.html`
-2. Kill old web server process
-3. Start new server on different port OR use cache-busting: `?v=timestamp`
+When updating data and the browser shows old data:
+1. Regenerate `index_standalone.html` (data must be embedded correctly)
+2. Kill old web server process: `pkill -f "http.server"`
+3. Start new server on **different port**: `python3 -m http.server 7777`
 4. Hard refresh in browser: Cmd+Shift+R (Mac) / Ctrl+Shift+R (Windows)
-5. If still broken: Open in incognito/private window
+5. **Best solution**: Open in new incognito/private window to guarantee fresh load
+
+**Common Error**: "initializeUI is not defined"
+- Cause: Browser cached old broken version of standalone HTML
+- Fix: Open in incognito window OR use different port
 
 ## Key Insights for Future Work
 
@@ -332,3 +364,98 @@ When updating data:
 - Popular models on 4-17 providers (multi-cloud reality)
 - Llama most widely available
 - Some models exclusive to native platforms (e.g., certain Claude/GPT versions)
+
+## Development Workflow
+
+### When Making Changes
+
+1. **Edit source files** (Python scripts, `index.html`)
+2. **Test locally** with web server
+3. **Regenerate standalone HTML** if UI changed
+4. **Commit changes** to git
+
+### Files in Git
+**Tracked** (committed):
+- Source code (*.py, index.html)
+- Data files (infrastructure_provider_map.json, provider_research.json)
+- Documentation (*.md)
+- Generated standalone (index_standalone.html)
+
+**Ignored** (.gitignore):
+- Temporary files (mapping_progress.json, test_modal.html, backups)
+- Python cache (__pycache__, *.pyc)
+- IDE/OS files (.vscode, .DS_Store)
+
+### Typical Development Cycle
+
+```bash
+# 1. Make changes to Python scripts or index.html
+
+# 2. If you changed the data pipeline, refresh data
+python3 map_infrastructure_providers.py
+
+# 3. If you changed index.html, regenerate standalone
+python3 << 'EOF'
+import json
+with open('infrastructure_provider_map.json') as f:
+    data = json.load(f)
+with open('index.html') as f:
+    html = f.read()
+html = html.replace(
+    '''async function loadData() {
+            try {
+                const response = await fetch('infrastructure_provider_map.json');
+                infraData = await response.json();
+                initializeUI();
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('providers-table-container').innerHTML =
+                    '<div class="no-results">Error loading data. Make sure infrastructure_provider_map.json exists in the same directory.<br><br>If opening directly as a file, use index_standalone.html instead or run a web server.</div>';
+            }
+        }''',
+    '''async function loadData() {
+            // Data embedded in standalone version
+            infraData = ''' + json.dumps(data) + ''';
+            initializeUI();
+        }'''
+)
+with open('index_standalone.html', 'w') as f:
+    f.write(html)
+print("✅ Regenerated standalone")
+EOF
+
+# 4. Test in browser (use new port or incognito to avoid cache)
+python3 -m http.server 7777
+open "http://localhost:7777/index_standalone.html"
+
+# 5. Commit if everything works
+git add -A
+git commit -m "Your descriptive message"
+```
+
+### Provider Research Process
+
+The `provider_research.json` file was created via background AI agents that performed web searches for:
+- Company homepage
+- Contact email
+- Support URL
+- Headquarters city
+- Company description
+
+This enrichment is **optional** - the system works without it, but enriched data provides better user experience. To add more provider research:
+
+1. Use AI agent to research providers (web search for official info)
+2. Save results to `provider_research.json` in the format:
+   ```json
+   {
+     "ProviderName": {
+       "homepage": "https://...",
+       "contact_email": "...",
+       "support_url": "https://...",
+       "headquarters_city": "...",
+       "headquarters_country": "US",
+       "company_description": "..."
+     }
+   }
+   ```
+3. Run `python3 integrate_research.py` to merge into main data file
