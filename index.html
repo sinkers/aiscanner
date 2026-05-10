@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OpenRouter Infrastructure Provider Map</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -524,6 +525,92 @@
             color: #6a6a6a;
             margin-top: 4px;
         }
+        /* Comparisons view */
+        .comparison-model-card {
+            background: #1a1f2e;
+            border: 1px solid #2a2f3e;
+            border-radius: 12px;
+            margin-bottom: 10px;
+            overflow: hidden;
+        }
+
+        .comparison-model-header {
+            padding: 14px 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            transition: background 0.15s;
+            user-select: none;
+        }
+
+        .comparison-model-header:hover { background: #252b3d; }
+        .comparison-model-header.expanded {
+            background: #252b3d;
+            border-bottom: 1px solid #2a2f3e;
+        }
+
+        .comparison-chevron {
+            color: #667eea;
+            font-size: 0.75em;
+            transition: transform 0.2s;
+            flex-shrink: 0;
+        }
+
+        .comparison-chevron.open { transform: rotate(90deg); }
+
+        .comparison-model-name {
+            font-weight: 600;
+            color: #e0e0e0;
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .comparison-cheapest {
+            color: #4ade80;
+            font-family: 'Courier New', monospace;
+            font-size: 0.88em;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .comparison-spread {
+            color: #f59e0b;
+            font-size: 0.8em;
+            margin-left: 6px;
+        }
+
+        .comparison-provider-badge {
+            background: rgba(102,126,234,0.15);
+            color: #667eea;
+            border: 1px solid rgba(102,126,234,0.3);
+            padding: 2px 10px;
+            border-radius: 20px;
+            font-size: 0.82em;
+            font-weight: 600;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .comparison-detail {
+            display: none;
+            padding: 20px;
+        }
+
+        .comparison-detail.open { display: block; }
+
+        .comparison-history-section {
+            margin-top: 20px;
+            padding: 15px;
+            background: #0f1419;
+            border-radius: 8px;
+            border: 1px solid #2a2f3e;
+        }
+
+        .cheapest-price { color: #4ade80; font-weight: 600; }
     </style>
 </head>
 <body>
@@ -581,6 +668,7 @@
             <button class="tab" data-view="geography">By Geography</button>
             <button class="tab" data-view="performance">Performance Leaders</button>
             <button class="tab" data-view="pricing">Pricing Comparison</button>
+            <button class="tab" data-view="comparisons">Model Comparisons</button>
         </div>
 
         <div id="providers-view" class="view active">
@@ -601,6 +689,10 @@
 
         <div id="pricing-view" class="view">
             <div id="pricing-container"></div>
+        </div>
+
+        <div id="comparisons-view" class="view">
+            <div id="comparisons-container"></div>
         </div>
     </div>
 
@@ -629,17 +721,21 @@
             price: { min: '', max: '' }
         };
 
-        // Load data
+        // Load data — tries hosted rollup first, falls back to local file
         async function loadData() {
-            try {
-                const response = await fetch('infrastructure_provider_map.json');
-                infraData = await response.json();
-                initializeUI();
-            } catch (error) {
-                console.error('Error loading data:', error);
-                document.getElementById('providers-table-container').innerHTML =
-                    '<div class="no-results">Error loading data. Make sure infrastructure_provider_map.json exists in the same directory.<br><br>If opening directly as a file, use index_standalone.html instead or run a web server.</div>';
+            const sources = ['rollups/latest.json', 'infrastructure_provider_map.json'];
+            for (const src of sources) {
+                try {
+                    const response = await fetch(src);
+                    if (!response.ok) continue;
+                    infraData = await response.json();
+                    initializeUI();
+                    return;
+                } catch (_) {}
             }
+            console.error('Could not load data from any source');
+            document.getElementById('providers-table-container').innerHTML =
+                '<div class="no-results">Error loading data. Make sure infrastructure_provider_map.json exists in the same directory.<br><br>If opening directly as a file, use index_standalone.html instead or run a web server.</div>';
         }
 
         function initializeUI() {
@@ -649,6 +745,7 @@
             renderGeographyView();
             renderPerformanceView();
             renderPricingView();
+            renderComparisonsView();
 
             // Setup event listeners
             document.getElementById('search').addEventListener('input', applyFilters);
@@ -1245,6 +1342,13 @@
                     </div>
                 ` : ''}
 
+                <div style="margin: 20px 0; padding: 15px; background: #0f1419; border-radius: 8px; border: 1px solid #2a2f3e;">
+                    <div class="info-label" style="margin-bottom: 12px;">Avg Pricing History (per 1M tokens)</div>
+                    <div id="history-chart-container" style="position:relative; height:160px;">
+                        <canvas id="history-chart"></canvas>
+                    </div>
+                </div>
+
                 <div class="model-list">
                     <h3>Models (${data.total_models})</h3>
                     <div style="max-height: 400px; overflow-y: auto;">
@@ -1272,9 +1376,87 @@
             document.getElementById('modal-title').textContent = providerName;
             document.getElementById('modal-body').innerHTML = modalBody;
             document.getElementById('provider-modal').classList.add('active');
+            loadProviderHistory(providerName);
+        }
+
+        let _historyChart = null;
+
+        async function loadProviderHistory(providerName) {
+            const container = document.getElementById('history-chart-container');
+            if (!container) return;
+
+            const safeName = providerName.replace(/[/\s]/g, '_');
+            try {
+                const resp = await fetch(`rollups/providers/${safeName}.json`);
+                if (!resp.ok) {
+                    container.innerHTML = '<div style="text-align:center;color:#a0a0a0;padding:20px;font-size:0.85em;">No history yet — check back after the first daily run.</div>';
+                    return;
+                }
+                const data = await resp.json();
+                if (!data.history || data.history.length < 2) {
+                    container.innerHTML = '<div style="text-align:center;color:#a0a0a0;padding:20px;font-size:0.85em;">Only one data point so far — history builds up daily.</div>';
+                    return;
+                }
+
+                // Rebuild canvas (Chart.js needs a fresh element after innerHTML swap)
+                container.innerHTML = '<canvas id="history-chart"></canvas>';
+                const ctx = document.getElementById('history-chart').getContext('2d');
+
+                if (_historyChart) { _historyChart.destroy(); _historyChart = null; }
+
+                _historyChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.history.map(h => h.date),
+                        datasets: [
+                            {
+                                label: 'Avg Prompt',
+                                data: data.history.map(h => h.avg_prompt_price != null ? +(h.avg_prompt_price * 1e6).toFixed(6) : null),
+                                borderColor: '#667eea',
+                                backgroundColor: 'rgba(102,126,234,0.1)',
+                                tension: 0.3,
+                                fill: true,
+                                pointRadius: 3,
+                            },
+                            {
+                                label: 'Avg Completion',
+                                data: data.history.map(h => h.avg_completion_price != null ? +(h.avg_completion_price * 1e6).toFixed(6) : null),
+                                borderColor: '#764ba2',
+                                backgroundColor: 'rgba(118,75,162,0.1)',
+                                tension: 0.3,
+                                fill: true,
+                                pointRadius: 3,
+                            },
+                        ],
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: { mode: 'index', intersect: false },
+                        plugins: {
+                            legend: { labels: { color: '#e0e0e0', boxWidth: 12 } },
+                            tooltip: {
+                                callbacks: {
+                                    label: ctx => `${ctx.dataset.label}: $${ctx.parsed.y.toFixed(4)} / 1M`,
+                                },
+                            },
+                        },
+                        scales: {
+                            x: { ticks: { color: '#a0a0a0', maxTicksLimit: 10 }, grid: { color: '#2a2f3e' } },
+                            y: {
+                                ticks: { color: '#a0a0a0', callback: v => `$${v.toFixed(4)}` },
+                                grid: { color: '#2a2f3e' },
+                            },
+                        },
+                    },
+                });
+            } catch (e) {
+                container.innerHTML = '<div style="text-align:center;color:#a0a0a0;padding:20px;font-size:0.85em;">No history yet — check back after the first daily run.</div>';
+            }
         }
 
         function closeModal() {
+            if (_historyChart) { _historyChart.destroy(); _historyChart = null; }
             document.getElementById('provider-modal').classList.remove('active');
         }
 
@@ -1381,6 +1563,236 @@
                 closeModal();
             }
         });
+
+        // ----------------------------------------------------------------
+        // Comparisons view
+        // ----------------------------------------------------------------
+
+        const CHART_COLORS = [
+            '#667eea','#4ade80','#f59e0b','#ef4444','#06b6d4',
+            '#ec4899','#84cc16','#f97316','#8b5cf6','#764ba2',
+        ];
+
+        let _modelCharts = new Map();
+
+        function renderComparisonsView() {
+            // Build model -> providers map from the flat provider data
+            const modelMap = {};
+            Object.entries(infraData.providers).forEach(([providerName, providerData]) => {
+                providerData.models.forEach(model => {
+                    if (!modelMap[model.model_id]) {
+                        modelMap[model.model_id] = {
+                            modelId: model.model_id,
+                            modelName: model.model_name,
+                            providers: [],
+                        };
+                    }
+                    modelMap[model.model_id].providers.push({
+                        providerName,
+                        promptPrice: model.pricing.prompt,
+                        completionPrice: model.pricing.completion,
+                        totalPrice: model.pricing.prompt + model.pricing.completion,
+                        uptime24h: model.performance.uptime_24h,
+                        latencyP50: model.performance.latency_30m ? model.performance.latency_30m.p50 : null,
+                        hq: infraData.providers[providerName].provider_info.headquarters || null,
+                    });
+                });
+            });
+
+            const multiProvider = Object.values(modelMap)
+                .filter(m => m.providers.length > 1)
+                .sort((a, b) => b.providers.length - a.providers.length);
+
+            const rows = multiProvider.map(m => buildComparisonCard(m)).join('');
+
+            document.getElementById('comparisons-container').innerHTML = `
+                <div style="margin-bottom:20px; display:flex; gap:15px; align-items:center; flex-wrap:wrap;">
+                    <input type="text" id="comparison-search"
+                           placeholder="Filter models..."
+                           style="flex:1; max-width:400px;"
+                           oninput="filterComparisons(this.value)">
+                    <span id="comparison-count" style="color:#a0a0a0; font-size:0.9em; white-space:nowrap;">
+                        ${multiProvider.length} models available from 2+ providers
+                    </span>
+                </div>
+                <div id="comparison-list">${rows}</div>
+            `;
+        }
+
+        function buildComparisonCard(modelData) {
+            const sorted = [...modelData.providers].sort((a, b) => a.totalPrice - b.totalPrice);
+            const minPrice = sorted[0].totalPrice;
+            const maxPrice = sorted[sorted.length - 1].totalPrice;
+            const spread = minPrice > 0
+                ? Math.round((maxPrice - minPrice) / minPrice * 100)
+                : null;
+
+            const safeId = modelData.modelId.replace(/[^a-zA-Z0-9]/g, '_');
+            const cheapestFmt = minPrice === 0 ? 'FREE' : `$${(minPrice * 1e6).toFixed(4)}/1M`;
+            const spreadHtml = spread && spread > 0
+                ? `<span class="comparison-spread">${spread}% spread</span>`
+                : '';
+
+            const rows = sorted.map(p => {
+                const isCheapest = p.totalPrice === minPrice;
+                const cls = isCheapest ? 'class="cheapest-price"' : '';
+                const promptFmt  = p.promptPrice  === 0 ? 'FREE' : `$${(p.promptPrice  * 1e6).toFixed(4)}`;
+                const completionFmt = p.completionPrice === 0 ? 'FREE' : `$${(p.completionPrice * 1e6).toFixed(4)}`;
+                const totalFmt   = p.totalPrice === 0 ? 'FREE'
+                    : `$${(p.totalPrice * 1e6).toFixed(4)}${isCheapest ? ' ✓' : ''}`;
+                const uptime  = p.uptime24h  != null ? `${p.uptime24h.toFixed(1)}%`  : 'N/A';
+                const latency = p.latencyP50 != null ? `${Math.round(p.latencyP50)}ms` : 'N/A';
+                return [
+                    `<tr>`,
+                    `<td><span class="provider-name" data-p="${escapeHtml(p.providerName)}" onclick="showProviderDetails(this.dataset.p)">${escapeHtml(p.providerName)}</span></td>`,
+                    `<td>${renderLocation(p.hq)}</td>`,
+                    `<td class="price" ${cls}>${promptFmt}</td>`,
+                    `<td class="price" ${cls}>${completionFmt}</td>`,
+                    `<td class="price" ${cls}>${totalFmt}</td>`,
+                    `<td>${uptime}</td>`,
+                    `<td>${latency}</td>`,
+                    `</tr>`,
+                ].join('');
+            }).join('');
+
+            return `
+                <div class="comparison-model-card" data-model-id="${escapeHtml(modelData.modelId)}" data-safe-id="${safeId}">
+                    <div class="comparison-model-header"
+                         data-model-id="${escapeHtml(modelData.modelId)}"
+                         data-safe-id="${safeId}"
+                         onclick="toggleModelComparison(this)">
+                        <span class="comparison-chevron" id="chevron-${safeId}">&#9654;</span>
+                        <span class="comparison-model-name" title="${escapeHtml(modelData.modelId)}">${escapeHtml(modelData.modelName || modelData.modelId)}</span>
+                        <span class="comparison-cheapest">${cheapestFmt}${spreadHtml}</span>
+                        <span class="comparison-provider-badge">${modelData.providers.length} providers</span>
+                    </div>
+                    <div class="comparison-detail" id="detail-${safeId}">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th style="cursor:default">Provider</th>
+                                    <th style="cursor:default">Location</th>
+                                    <th style="cursor:default">Prompt /1M</th>
+                                    <th style="cursor:default">Completion /1M</th>
+                                    <th style="cursor:default">Total /1M</th>
+                                    <th style="cursor:default">Uptime</th>
+                                    <th style="cursor:default">Latency</th>
+                                </tr>
+                            </thead>
+                            <tbody>${rows}</tbody>
+                        </table>
+                        <div class="comparison-history-section">
+                            <div class="info-label" style="margin-bottom:10px;">Price History — combined prompt + completion per 1M tokens</div>
+                            <div id="history-content-${safeId}" style="position:relative; height:180px;">
+                                <div style="text-align:center; color:#a0a0a0; padding:40px; font-size:0.85em;">Expand to load history...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        function toggleModelComparison(headerEl) {
+            const safeId  = headerEl.dataset.safeId;
+            const modelId = headerEl.dataset.modelId;
+            const detail  = document.getElementById(`detail-${safeId}`);
+            const chevron = document.getElementById(`chevron-${safeId}`);
+            const isOpen  = detail.classList.contains('open');
+
+            if (isOpen) {
+                detail.classList.remove('open');
+                headerEl.classList.remove('expanded');
+                chevron.classList.remove('open');
+                if (_modelCharts.has(safeId)) {
+                    _modelCharts.get(safeId).destroy();
+                    _modelCharts.delete(safeId);
+                }
+            } else {
+                detail.classList.add('open');
+                headerEl.classList.add('expanded');
+                chevron.classList.add('open');
+                loadModelHistory(safeId, modelId);
+            }
+        }
+
+        async function loadModelHistory(safeId, modelId) {
+            const container = document.getElementById(`history-content-${safeId}`);
+            if (!container || _modelCharts.has(safeId)) return;
+
+            const safeModelId = modelId.replace(':', '_');
+            try {
+                const resp = await fetch(`rollups/models/${safeModelId}.json`);
+                if (!resp.ok) throw new Error('not found');
+                const data = await resp.json();
+
+                if (!data.history || data.history.length < 2) {
+                    container.innerHTML = '<div style="text-align:center;color:#a0a0a0;padding:20px;font-size:0.85em;">Only one data point so far — history builds up daily.</div>';
+                    return;
+                }
+
+                // Collect all provider names across all dates
+                const providerSet = new Set();
+                data.history.forEach(h => h.providers.forEach(p => providerSet.add(p.provider)));
+                const providers = Array.from(providerSet).sort();
+
+                const datasets = providers.map((name, i) => ({
+                    label: name,
+                    data: data.history.map(h => {
+                        const entry = h.providers.find(p => p.provider === name);
+                        return entry != null
+                            ? +((entry.prompt_price + entry.completion_price) * 1e6).toFixed(6)
+                            : null;
+                    }),
+                    borderColor: CHART_COLORS[i % CHART_COLORS.length],
+                    backgroundColor: CHART_COLORS[i % CHART_COLORS.length] + '22',
+                    tension: 0.3,
+                    fill: false,
+                    pointRadius: 3,
+                    spanGaps: true,
+                }));
+
+                container.innerHTML = '<canvas></canvas>';
+                const ctx = container.querySelector('canvas').getContext('2d');
+                const chart = new Chart(ctx, {
+                    type: 'line',
+                    data: { labels: data.history.map(h => h.date), datasets },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: { mode: 'index', intersect: false },
+                        plugins: {
+                            legend: { labels: { color: '#e0e0e0', boxWidth: 10, font: { size: 11 } } },
+                            tooltip: {
+                                callbacks: {
+                                    label: c => `${c.dataset.label}: $${c.parsed.y != null ? c.parsed.y.toFixed(4) : 'N/A'}/1M`,
+                                },
+                            },
+                        },
+                        scales: {
+                            x: { ticks: { color: '#a0a0a0', maxTicksLimit: 10 }, grid: { color: '#2a2f3e' } },
+                            y: {
+                                ticks: { color: '#a0a0a0', callback: v => `$${v.toFixed(4)}` },
+                                grid: { color: '#2a2f3e' },
+                            },
+                        },
+                    },
+                });
+                _modelCharts.set(safeId, chart);
+            } catch (e) {
+                container.innerHTML = '<div style="text-align:center;color:#a0a0a0;padding:20px;font-size:0.85em;">No history yet — check back after the first daily run.</div>';
+            }
+        }
+
+        function filterComparisons(query) {
+            const q = query.toLowerCase();
+            let visible = 0;
+            document.querySelectorAll('#comparison-list .comparison-model-card').forEach(card => {
+                const match = !q || card.dataset.modelId.toLowerCase().includes(q);
+                card.style.display = match ? '' : 'none';
+                if (match) visible++;
+            });
+            const el = document.getElementById('comparison-count');
+            if (el) el.textContent = `${visible} models available from 2+ providers`;
+        }
 
         // Load data on page load
         loadData();
