@@ -130,7 +130,7 @@ def main():
     # ------------------------------------------------------------------
     if upload_ui:
         print("\nUploading UI files...")
-        for filename in ["index.html"]:
+        for filename in ["index.html", "llm.html", "gpu.html"]:
             filepath = os.path.join(base_dir, filename)
             if os.path.exists(filepath):
                 with open(filepath, "rb") as f:

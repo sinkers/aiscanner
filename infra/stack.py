@@ -141,6 +141,9 @@ class PricingStack(Stack):
             environment={
                 "S3_BUCKET": bucket.bucket_name,
                 "OPENROUTER_API_TOKEN": "REDACTED_OPENROUTER_TOKEN_1",
+                # GPU rental pricing — set these to enable RunPod/Vast.ai collection
+                "RUNPOD_API_KEY": os.environ.get("RUNPOD_API_KEY", ""),
+                "VAST_API_KEY": os.environ.get("VAST_API_KEY", ""),
             },
         )
 

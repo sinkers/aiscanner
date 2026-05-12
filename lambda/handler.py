@@ -1,16 +1,21 @@
 """
-Daily OpenRouter pricing collector.
+Daily data collector — OpenRouter LLM pricing + GPU rental pricing.
 
-Fetches endpoints for all models, writes:
-  snapshots/YYYY-MM-DD.json        raw archive
-  rollups/latest.json              current state (UI loads this)
-  rollups/providers/{name}.json    per-provider price history
-  rollups/models/{model_id}.json   per-model cross-provider history
-  rollups/benchmarks.json          Open LLM Leaderboard scores
+Writes to S3:
+  snapshots/YYYY-MM-DD.json             OpenRouter raw archive
+  rollups/latest.json                   LLM provider state (UI loads this)
+  rollups/providers/{name}.json         per-provider LLM price history
+  rollups/models/{model_id}.json        per-model cross-provider history
+  rollups/benchmarks.json               Open LLM Leaderboard scores
+  snapshots/gpu/YYYY-MM-DD.json         GPU pricing raw archive
+  rollups/gpu/latest.json               GPU current state
+  rollups/gpu/history/{gpu_name}.json   per-GPU daily price history
 
 Environment variables (set by CDK):
   S3_BUCKET               target bucket
   OPENROUTER_API_TOKEN    bearer token for /endpoints API
+  RUNPOD_API_KEY          RunPod GraphQL API key (optional)
+  VAST_API_KEY            Vast.ai REST API key (optional)
 """
 
 import json
@@ -25,6 +30,8 @@ from collections import defaultdict
 
 S3_BUCKET = os.environ["S3_BUCKET"]
 API_TOKEN = os.environ["OPENROUTER_API_TOKEN"]
+RUNPOD_API_KEY = os.environ.get("RUNPOD_API_KEY", "")
+VAST_API_KEY = os.environ.get("VAST_API_KEY", "")
 BASE_URL = "https://openrouter.ai/api/v1"
 
 s3 = boto3.client("s3")
@@ -48,6 +55,21 @@ def http_get(url, token=None):
         return None
     except Exception as e:
         print(f"Error fetching {url}: {e}")
+        return None
+
+
+def http_post(url, body, headers=None):
+    """POST JSON body; returns parsed response or None on error."""
+    all_headers = {"User-Agent": "dame-pricing-collector/1.0", "Content-Type": "application/json"}
+    if headers:
+        all_headers.update(headers)
+    data = json.dumps(body).encode()
+    req = urllib.request.Request(url, data=data, headers=all_headers, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return json.loads(resp.read().decode())
+    except Exception as e:
+        print(f"Error POSTing {url}: {e}")
         return None
 
 
@@ -327,6 +349,172 @@ def fetch_benchmarks():
 
 
 # ---------------------------------------------------------------------------
+# GPU pricing collection (RunPod + Vast.ai)
+# ---------------------------------------------------------------------------
+
+RUNPOD_GRAPHQL_URL = "https://api.runpod.io/graphql"
+VAST_API_URL = "https://console.vast.ai/api/v0"
+
+_RUNPOD_QUERY = """
+{
+  gpuTypes {
+    id
+    displayName
+    memoryInGb
+    secureCloud
+    communityCloud
+    securePrice
+    communityPrice
+    secureSpotPrice
+    communitySpotPrice
+    lowestPrice(input: {gpuCount: 1}) {
+      minimumBidPrice
+      uninterruptablePrice
+    }
+  }
+}
+"""
+
+
+def fetch_runpod_gpus():
+    """Fetch GPU types and pricing from RunPod GraphQL API."""
+    if not RUNPOD_API_KEY:
+        return []
+    data = http_post(
+        RUNPOD_GRAPHQL_URL,
+        {"query": _RUNPOD_QUERY},
+        headers={"Authorization": f"Bearer {RUNPOD_API_KEY}"},
+    )
+    if not data:
+        return []
+    if "errors" in data:
+        print(f"RunPod API errors: {data['errors']}")
+        return []
+    results = []
+    for gpu in data.get("data", {}).get("gpuTypes", []):
+        lp = gpu.get("lowestPrice") or {}
+        results.append({
+            "id": gpu.get("id"),
+            "name": gpu.get("displayName"),
+            "vram_gb": gpu.get("memoryInGb"),
+            "secure_cloud_available": gpu.get("secureCloud", False),
+            "community_cloud_available": gpu.get("communityCloud", False),
+            "pricing": {
+                "secure_on_demand":    gpu.get("securePrice"),
+                "community_on_demand": gpu.get("communityPrice"),
+                "secure_spot":         gpu.get("secureSpotPrice"),
+                "community_spot":      gpu.get("communitySpotPrice"),
+                "minimum_bid":         lp.get("minimumBidPrice"),
+                "uninterruptable":     lp.get("uninterruptablePrice"),
+            },
+        })
+    return results
+
+
+def fetch_vastai_gpus():
+    """Fetch GPU offers from Vast.ai and aggregate by GPU type."""
+    if not VAST_API_KEY:
+        return []
+    data = http_get(f"{VAST_API_URL}/bundles/?api_key={VAST_API_KEY}")
+    if not isinstance(data, list):
+        print(f"Unexpected Vast.ai response: {type(data)}")
+        return []
+
+    gpu_groups = {}
+    for offer in data:
+        name = offer.get("gpu_name", "Unknown")
+        if name not in gpu_groups:
+            gpu_groups[name] = {
+                "vram_gb": (offer.get("gpu_ram") or 0) / 1024,
+                "offers": [],
+            }
+        gpu_groups[name]["offers"].append({
+            "id": offer.get("id"),
+            "price_per_hour": offer.get("dph_total"),
+            "rentable": offer.get("rentable", False),
+            "reliability": offer.get("reliability2", 0),
+            "num_gpus": offer.get("num_gpus", 1),
+            "cuda_vers": offer.get("cuda_max_good"),
+            "dlperf": offer.get("dlperf"),
+        })
+
+    results = []
+    for gpu_name, gdata in gpu_groups.items():
+        offers = gdata["offers"]
+        rentable = [o for o in offers if o["rentable"]]
+        all_prices = [o["price_per_hour"] for o in offers if o["price_per_hour"]]
+        rent_prices = [o["price_per_hour"] for o in rentable if o["price_per_hour"]]
+        if not all_prices:
+            continue
+        results.append({
+            "name": gpu_name,
+            "vram_gb": gdata["vram_gb"],
+            "total_offers": len(offers),
+            "rentable_offers": len(rentable),
+            "pricing": {
+                "min": min(all_prices),
+                "max": max(all_prices),
+                "avg": sum(all_prices) / len(all_prices),
+                "rentable_min": min(rent_prices) if rent_prices else None,
+                "rentable_avg": sum(rent_prices) / len(rent_prices) if rent_prices else None,
+            },
+            "sample_offers": rentable[:5],
+        })
+    results.sort(key=lambda x: x["name"])
+    return results
+
+
+def update_gpu_rollups(gpu_snapshot, today):
+    """Append today's prices to per-GPU history files."""
+    # RunPod GPU history
+    for gpu in gpu_snapshot.get("runpod", {}).get("gpus", []):
+        name = gpu.get("name", "")
+        if not name:
+            continue
+        key = f"rollups/gpu/history/{safe_key(name)}.json"
+        rollup = s3_get_json(key) or {"gpu_name": name, "history": []}
+        rollup["history"] = [h for h in rollup["history"] if h["date"] != today]
+        p = gpu.get("pricing", {})
+        rollup["history"].append({
+            "date": today,
+            "provider": "runpod",
+            "secure_on_demand":    p.get("secure_on_demand"),
+            "community_on_demand": p.get("community_on_demand"),
+            "secure_spot":         p.get("secure_spot"),
+            "community_spot":      p.get("community_spot"),
+        })
+        rollup["history"].sort(key=lambda x: x["date"])
+        s3_put_json(key, rollup, cache_seconds=86400)
+
+    # Vast.ai GPU history
+    for gpu in gpu_snapshot.get("vast", {}).get("gpus", []):
+        name = gpu.get("name", "")
+        if not name:
+            continue
+        key = f"rollups/gpu/history/{safe_key(name)}.json"
+        rollup = s3_get_json(key) or {"gpu_name": name, "history": []}
+        # Merge: keep existing runpod entry for today if present, add vast entry
+        existing_today = [h for h in rollup["history"] if h["date"] == today]
+        rollup["history"] = [h for h in rollup["history"] if h["date"] != today]
+        p = gpu.get("pricing", {})
+        # If there was already a runpod entry today, merge both into a combined record
+        combined = existing_today[0] if existing_today else {"date": today}
+        combined.update({
+            "vast_min":             p.get("min"),
+            "vast_avg":             p.get("avg"),
+            "vast_rentable_min":    p.get("rentable_min"),
+            "vast_rentable_offers": gpu.get("rentable_offers"),
+        })
+        rollup["history"].append(combined)
+        rollup["history"].sort(key=lambda x: x["date"])
+        s3_put_json(key, rollup, cache_seconds=86400)
+
+    runpod_count = len(gpu_snapshot.get("runpod", {}).get("gpus", []))
+    vast_count = len(gpu_snapshot.get("vast", {}).get("gpus", []))
+    print(f"GPU rollups updated: {runpod_count} RunPod + {vast_count} Vast.ai GPU types")
+
+
+# ---------------------------------------------------------------------------
 # Lambda entry point
 # ---------------------------------------------------------------------------
 
@@ -387,6 +575,23 @@ def handler(event, context):
         print(f"Benchmarks saved: {benchmarks['total']} models ranked")
     else:
         print("Warning: benchmark fetch returned no data")
+
+    # GPU rental pricing (RunPod + Vast.ai)
+    print("Fetching GPU rental pricing...")
+    runpod_gpus = fetch_runpod_gpus()
+    vast_gpus = fetch_vastai_gpus()
+    if runpod_gpus or vast_gpus:
+        gpu_snapshot = {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "runpod": {"total_gpus": len(runpod_gpus), "gpus": runpod_gpus},
+            "vast":   {"total_gpu_types": len(vast_gpus), "gpus": vast_gpus},
+        }
+        s3_put_json(f"snapshots/gpu/{today}.json", gpu_snapshot, cache_seconds=86400)
+        s3_put_json("rollups/gpu/latest.json", gpu_snapshot, cache_seconds=3600)
+        update_gpu_rollups(gpu_snapshot, today)
+        print(f"GPU pricing saved: {len(runpod_gpus)} RunPod + {len(vast_gpus)} Vast.ai")
+    else:
+        print("GPU API keys not configured — skipping GPU pricing collection")
 
     print("Done.")
     return {"statusCode": 200, "date": today}

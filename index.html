@@ -3,2144 +3,324 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OpenRouter Infrastructure Provider Map</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+    <title>DAME AI Infrastructure Intelligence</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: #0f1419;
             color: #e0e0e0;
-            line-height: 1.6;
+            min-height: 100vh;
         }
 
         .container {
-            max-width: 1400px;
+            max-width: 1200px;
             margin: 0 auto;
-            padding: 20px;
+            padding: 40px 20px;
         }
 
         header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            padding: 40px 20px;
             text-align: center;
-            margin-bottom: 30px;
-            border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+            margin-bottom: 60px;
         }
 
-        h1 {
-            font-size: 2.5em;
-            margin-bottom: 10px;
-            color: white;
+        .logo {
+            font-size: 3em;
+            font-weight: 900;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -1px;
+            margin-bottom: 12px;
         }
 
-        .subtitle {
-            font-size: 1.1em;
-            opacity: 0.9;
-            color: white;
+        .tagline {
+            font-size: 1.2em;
+            color: #a0a0a0;
+            max-width: 560px;
+            margin: 0 auto;
+            line-height: 1.6;
         }
 
-        .stats {
+        .sections {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
+            grid-template-columns: repeat(auto-fit, minmax(480px, 1fr));
+            gap: 28px;
+            margin-bottom: 50px;
         }
 
-        .stat-card {
+        .section-card {
             background: #1a1f2e;
-            padding: 20px;
-            border-radius: 12px;
             border: 1px solid #2a2f3e;
-            text-align: center;
-            transition: transform 0.2s, box-shadow 0.2s;
+            border-radius: 16px;
+            padding: 36px;
+            text-decoration: none;
+            color: inherit;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+            position: relative;
+            overflow: hidden;
         }
 
-        .stat-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.2);
+        .section-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: var(--accent);
+            opacity: 0;
+            transition: opacity 0.2s;
         }
 
-        .stat-number {
+        .section-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(102,126,234,0.15);
+            border-color: #3a3f52;
+        }
+
+        .section-card:hover::before { opacity: 1; }
+
+        .section-card.llm { --accent: linear-gradient(90deg, #667eea, #764ba2); }
+        .section-card.gpu { --accent: linear-gradient(90deg, #06b6d4, #4ade80); }
+
+        .section-icon {
             font-size: 2.5em;
-            font-weight: bold;
+            line-height: 1;
+        }
+
+        .section-title {
+            font-size: 1.5em;
+            font-weight: 700;
+            color: #e0e0e0;
+        }
+
+        .section-description {
+            font-size: 0.97em;
+            color: #a0a0a0;
+            line-height: 1.7;
+            flex: 1;
+        }
+
+        .section-features {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 4px;
+        }
+
+        .feature-tag {
+            background: rgba(102,126,234,0.12);
+            border: 1px solid rgba(102,126,234,0.25);
+            color: #a0b4f0;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: 500;
+        }
+
+        .section-card.gpu .feature-tag {
+            background: rgba(6,182,212,0.12);
+            border-color: rgba(6,182,212,0.25);
+            color: #67d7ea;
+        }
+
+        .section-cta {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9em;
+            font-weight: 600;
+            color: #667eea;
+            margin-top: 8px;
+        }
+
+        .section-card.gpu .section-cta { color: #06b6d4; }
+
+        .section-cta-arrow {
+            font-size: 1.1em;
+            transition: transform 0.2s;
+        }
+
+        .section-card:hover .section-cta-arrow { transform: translateX(4px); }
+
+        /* Live stats strip */
+        .live-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 16px;
+            margin-bottom: 50px;
+        }
+
+        .stat-item {
+            background: #1a1f2e;
+            border: 1px solid #2a2f3e;
+            border-radius: 12px;
+            padding: 18px 20px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2em;
+            font-weight: 700;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            line-height: 1.1;
+        }
+
+        .stat-value.gpu-stat {
+            background: linear-gradient(135deg, #06b6d4 0%, #4ade80 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
         }
 
         .stat-label {
-            font-size: 0.9em;
-            color: #a0a0a0;
-            margin-top: 5px;
-        }
-
-        .controls {
-            background: #1a1f2e;
-            padding: 25px;
-            border-radius: 12px;
-            margin-bottom: 30px;
-            border: 1px solid #2a2f3e;
-        }
-
-        .control-row {
-            display: grid;
-            grid-template-columns: 2fr 1fr 1fr 1fr;
-            gap: 15px;
-            margin-bottom: 15px;
-        }
-
-        .control-group {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        label {
-            font-size: 0.85em;
-            color: #a0a0a0;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            font-weight: 600;
-        }
-
-        input, select {
-            padding: 12px;
-            border: 1px solid #2a2f3e;
-            border-radius: 8px;
-            background: #0f1419;
-            color: #e0e0e0;
-            font-size: 1em;
-            transition: border-color 0.3s;
-        }
-
-        input:focus, select:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-
-        .tabs {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-            border-bottom: 2px solid #2a2f3e;
-        }
-
-        .tab {
-            padding: 12px 24px;
-            background: transparent;
-            border: none;
-            color: #a0a0a0;
-            cursor: pointer;
-            font-size: 1em;
-            font-weight: 500;
-            transition: all 0.3s;
-            border-bottom: 3px solid transparent;
-            margin-bottom: -2px;
-        }
-
-        .tab:hover {
-            color: #e0e0e0;
-        }
-
-        .tab.active {
-            color: #667eea;
-            border-bottom-color: #667eea;
-        }
-
-        .view {
-            display: none;
-        }
-
-        .view.active {
-            display: block;
-        }
-
-        table {
-            width: 100%;
-            background: #1a1f2e;
-            border-radius: 12px;
-            overflow: hidden;
-            border-collapse: collapse;
-            border: 1px solid #2a2f3e;
-        }
-
-        th {
-            background: #252b3d;
-            padding: 15px;
-            text-align: left;
-            font-weight: 600;
-            color: #667eea;
-            cursor: pointer;
-            user-select: none;
-            position: relative;
-            white-space: nowrap;
-        }
-
-        th:hover {
-            background: #2a3146;
-        }
-
-        th.sortable::after {
-            content: ' ⇅';
-            opacity: 0.3;
             font-size: 0.8em;
-        }
-
-        th.sort-asc::after {
-            content: ' ↑';
-            opacity: 1;
-        }
-
-        th.sort-desc::after {
-            content: ' ↓';
-            opacity: 1;
-        }
-
-        .filter-row th {
-            background: #1e2433;
-            padding: 8px;
-            cursor: default;
-        }
-
-        .filter-row th:hover {
-            background: #1e2433;
-        }
-
-        .filter-row th::after {
-            content: '';
-        }
-
-        .column-filter {
-            width: 100%;
-            padding: 6px 8px;
-            background: #0f1419;
-            border: 1px solid #2a2f3e;
-            border-radius: 4px;
-            color: #e0e0e0;
-            font-size: 0.9em;
-        }
-
-        .column-filter:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-
-        .column-filter::placeholder {
-            color: #6a6a6a;
-        }
-
-        td {
-            padding: 15px;
-            border-top: 1px solid #2a2f3e;
-        }
-
-        tr:hover {
-            background: #1e2433;
-        }
-
-        .provider-name {
-            font-weight: 600;
-            color: #667eea;
-            cursor: pointer;
-            transition: color 0.2s;
-        }
-
-        .provider-name:hover {
-            color: #764ba2;
-            text-decoration: underline;
-        }
-
-        .badge {
-            display: inline-block;
-            padding: 4px 10px;
-            border-radius: 6px;
-            font-size: 0.85em;
-            font-weight: 600;
-            margin-right: 5px;
-        }
-
-        .badge-us { background: #1e3a8a; color: #93c5fd; }
-        .badge-cn { background: #7f1d1d; color: #fca5a5; }
-        .badge-sg { background: #065f46; color: #6ee7b7; }
-        .badge-fr { background: #3730a3; color: #c4b5fd; }
-        .badge-il { background: #831843; color: #f9a8d4; }
-        .badge-nl { background: #ea580c; color: #fed7aa; }
-        .badge-uk { background: #1e40af; color: #bfdbfe; }
-        .badge-unknown { background: #374151; color: #9ca3af; }
-
-        .price {
-            font-family: 'Courier New', monospace;
-            color: #4ade80;
-            font-weight: 600;
-        }
-
-        .metric {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-
-        .metric-bar {
-            height: 6px;
-            background: #2a2f3e;
-            border-radius: 3px;
-            flex: 1;
-            overflow: hidden;
-        }
-
-        .metric-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-            transition: width 0.3s;
-        }
-
-        .metric-value {
-            font-size: 0.9em;
-            min-width: 60px;
-            text-align: right;
-        }
-
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.8);
-            z-index: 1000;
-            padding: 20px;
-            overflow-y: auto;
-        }
-
-        .modal.active {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .modal-content {
-            background: #1a1f2e;
-            border-radius: 12px;
-            max-width: 900px;
-            width: 100%;
-            max-height: 90vh;
-            overflow-y: auto;
-            border: 1px solid #2a2f3e;
-        }
-
-        .modal-header {
-            padding: 25px;
-            border-bottom: 1px solid #2a2f3e;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        }
-
-        .modal-header h2 {
-            margin: 0;
-            color: white;
-        }
-
-        .modal-close {
-            background: rgba(255, 255, 255, 0.2);
-            border: none;
-            color: white;
-            font-size: 1.5em;
-            cursor: pointer;
-            width: 35px;
-            height: 35px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: background 0.2s;
-        }
-
-        .modal-close:hover {
-            background: rgba(255, 255, 255, 0.3);
-        }
-
-        .modal-body {
-            padding: 25px;
-        }
-
-        .info-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            margin-bottom: 25px;
-        }
-
-        .info-item {
-            background: #0f1419;
-            padding: 15px;
-            border-radius: 8px;
-            border: 1px solid #2a2f3e;
-        }
-
-        .info-label {
-            font-size: 0.85em;
             color: #a0a0a0;
-            margin-bottom: 5px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
+            margin-top: 6px;
         }
 
-        .info-value {
-            font-size: 1.1em;
-            font-weight: 600;
-            color: #e0e0e0;
-        }
-
-        .model-list {
-            margin-top: 20px;
-        }
-
-        .model-list h3 {
-            margin-bottom: 15px;
-            color: #667eea;
-        }
-
-        .model-item {
-            background: #0f1419;
-            padding: 15px;
-            border-radius: 8px;
-            border: 1px solid #2a2f3e;
-            margin-bottom: 10px;
-        }
-
-        .model-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 8px;
-        }
-
-        .model-id {
-            font-weight: 600;
-            color: #e0e0e0;
-        }
-
-        .model-pricing {
-            color: #4ade80;
-            font-family: 'Courier New', monospace;
-            font-size: 0.9em;
-        }
-
-        .model-details {
-            display: flex;
-            gap: 20px;
-            font-size: 0.85em;
-            color: #a0a0a0;
-        }
-
-        .no-results {
+        footer {
             text-align: center;
-            padding: 60px 20px;
-            color: #a0a0a0;
-            font-size: 1.1em;
-        }
-
-        .loading {
-            text-align: center;
-            padding: 60px 20px;
-            font-size: 1.2em;
-            color: #667eea;
-        }
-
-        .filters-summary {
-            background: #252b3d;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .clear-filters {
-            background: #667eea;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 0.9em;
-            transition: background 0.2s;
-        }
-
-        .clear-filters:hover {
-            background: #764ba2;
-        }
-
-        @media (max-width: 768px) {
-            .control-row {
-                grid-template-columns: 1fr;
-            }
-
-            .stats {
-                grid-template-columns: repeat(2, 1fr);
-            }
-
-            h1 {
-                font-size: 1.8em;
-            }
-
-            table {
-                font-size: 0.9em;
-            }
-
-            th, td {
-                padding: 10px;
-            }
-        }
-
-        .compare-btn {
-            background: #667eea;
-            color: white;
-            border: none;
-            padding: 6px 12px;
-            border-radius: 6px;
-            cursor: pointer;
+            color: #3a3f52;
             font-size: 0.85em;
-            transition: background 0.2s;
+            padding-top: 20px;
+            border-top: 1px solid #1a1f2e;
         }
 
-        .compare-btn:hover {
-            background: #764ba2;
-        }
+        footer a { color: #667eea; text-decoration: none; }
 
-        .filter-hint {
-            font-size: 0.75em;
-            color: #6a6a6a;
-            margin-top: 4px;
-        }
-        /* Comparisons view */
-        .comparison-model-card {
-            background: #1a1f2e;
-            border: 1px solid #2a2f3e;
-            border-radius: 12px;
-            margin-bottom: 10px;
-            overflow: hidden;
-        }
-
-        .comparison-model-header {
-            padding: 14px 20px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 14px;
-            transition: background 0.15s;
-            user-select: none;
-        }
-
-        .comparison-model-header:hover { background: #252b3d; }
-        .comparison-model-header.expanded {
-            background: #252b3d;
-            border-bottom: 1px solid #2a2f3e;
-        }
-
-        .comparison-chevron {
-            color: #667eea;
-            font-size: 0.75em;
-            transition: transform 0.2s;
-            flex-shrink: 0;
-        }
-
-        .comparison-chevron.open { transform: rotate(90deg); }
-
-        .comparison-model-name {
-            font-weight: 600;
-            color: #e0e0e0;
-            flex: 1;
-            min-width: 0;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .comparison-cheapest {
-            color: #4ade80;
-            font-family: 'Courier New', monospace;
-            font-size: 0.88em;
-            white-space: nowrap;
-            flex-shrink: 0;
-        }
-
-        .comparison-spread {
-            color: #f59e0b;
-            font-size: 0.8em;
-            margin-left: 6px;
-        }
-
-        .comparison-provider-badge {
-            background: rgba(102,126,234,0.15);
-            color: #667eea;
-            border: 1px solid rgba(102,126,234,0.3);
-            padding: 2px 10px;
-            border-radius: 20px;
-            font-size: 0.82em;
-            font-weight: 600;
-            white-space: nowrap;
-            flex-shrink: 0;
-        }
-
-        .comparison-detail {
-            display: none;
-            padding: 20px;
-        }
-
-        .comparison-detail.open { display: block; }
-
-        .comparison-history-section {
-            margin-top: 20px;
-            padding: 15px;
-            background: #0f1419;
-            border-radius: 8px;
-            border: 1px solid #2a2f3e;
-        }
-
-        .cheapest-price { color: #4ade80; font-weight: 600; }
-
-        /* ── Benchmark Rankings ── */
-        .benchmark-rank-badge {
-            background: linear-gradient(135deg, #f59e0b, #ef4444);
-            color: white;
-            padding: 2px 10px;
-            border-radius: 20px;
-            font-size: 0.78em;
-            font-weight: 700;
-            white-space: nowrap;
-            flex-shrink: 0;
-            font-family: 'Courier New', monospace;
-        }
-
-        .benchmark-controls {
-            display: flex;
-            gap: 15px;
-            align-items: center;
-            flex-wrap: wrap;
-            margin-bottom: 20px;
-        }
-
-        .benchmark-table-container {
-            overflow-x: auto;
-        }
-
-        .benchmark-table th, .benchmark-table td {
-            padding: 10px 12px;
-            font-size: 0.9em;
-        }
-
-        .benchmark-table td.score {
-            font-family: 'Courier New', monospace;
-            color: #a0c4ff;
-            text-align: right;
-        }
-
-        .benchmark-table td.rank-cell {
-            font-family: 'Courier New', monospace;
-            font-weight: 700;
-            color: #f59e0b;
-            text-align: center;
-        }
-
-        .benchmark-expand-row td {
-            padding: 0 !important;
-            border-top: none !important;
-        }
-
-        .benchmark-expand-content {
-            display: none;
-            background: #0f1419;
-            padding: 15px 20px;
-            border-top: 1px solid #2a2f3e;
-        }
-
-        .benchmark-expand-content.open { display: block; }
-
-        .toggle-switch {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            cursor: pointer;
-            font-size: 0.9em;
-            color: #a0a0a0;
-        }
-
-        .toggle-switch input[type=checkbox] {
-            width: 16px;
-            height: 16px;
-            cursor: pointer;
-            accent-color: #667eea;
-        }
-
-        .avg-score-bar {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .avg-score-fill {
-            height: 6px;
-            border-radius: 3px;
-            background: linear-gradient(90deg, #667eea, #4ade80);
-            min-width: 2px;
+        @media (max-width: 600px) {
+            .sections { grid-template-columns: 1fr; }
+            .logo { font-size: 2.2em; }
         }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>🌐 OpenRouter Infrastructure Provider Map</h1>
-            <p class="subtitle">Comprehensive mapping of model hosting providers, pricing, and performance</p>
+            <div class="logo">DAME AI Intel</div>
+            <p class="tagline">Real-time intelligence on AI infrastructure — model pricing, GPU rental rates, and benchmark rankings.</p>
         </header>
 
-        <div class="stats" id="stats">
-            <div class="stat-card">
-                <div class="stat-number">-</div>
-                <div class="stat-label">Providers</div>
+        <div class="live-stats" id="stats">
+            <div class="stat-item">
+                <div class="stat-value" id="stat-providers">–</div>
+                <div class="stat-label">LLM Providers</div>
             </div>
-            <div class="stat-card">
-                <div class="stat-number">-</div>
-                <div class="stat-label">Models</div>
+            <div class="stat-item">
+                <div class="stat-value" id="stat-models">–</div>
+                <div class="stat-label">Models Tracked</div>
             </div>
-            <div class="stat-card">
-                <div class="stat-number">-</div>
-                <div class="stat-label">Countries</div>
+            <div class="stat-item">
+                <div class="stat-value" id="stat-benchmarks">–</div>
+                <div class="stat-label">Models Ranked</div>
             </div>
-            <div class="stat-card">
-                <div class="stat-number">-</div>
-                <div class="stat-label">Avg Uptime</div>
+            <div class="stat-item">
+                <div class="stat-value gpu-stat" id="stat-runpod">–</div>
+                <div class="stat-label">RunPod GPU Types</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value gpu-stat" id="stat-vast">–</div>
+                <div class="stat-label">Vast.ai GPU Types</div>
             </div>
         </div>
 
-        <div class="controls">
-            <div class="control-row">
-                <div class="control-group">
-                    <label for="search">Global Search</label>
-                    <input type="text" id="search" placeholder="Search providers or models...">
+        <div class="sections">
+            <a href="llm.html" class="section-card llm">
+                <div class="section-icon">🌐</div>
+                <div class="section-title">LLM Providers &amp; Benchmarks</div>
+                <div class="section-description">
+                    Maps every infrastructure provider hosting AI models on OpenRouter — showing who serves what, where they are, pricing per 1M tokens, real-time uptime and latency, and Open LLM Leaderboard benchmark rankings.
                 </div>
-                <div class="control-group">
-                    <label for="location">Quick Location Filter</label>
-                    <select id="location">
-                        <option value="">All Locations</option>
-                    </select>
+                <div class="section-features">
+                    <span class="feature-tag">67 Providers</span>
+                    <span class="feature-tag">400+ Models</span>
+                    <span class="feature-tag">Price History</span>
+                    <span class="feature-tag">Benchmark Rankings</span>
+                    <span class="feature-tag">Daily Updates</span>
                 </div>
-                <div class="control-group">
-                    <label for="minModels">Min Models</label>
-                    <input type="number" id="minModels" placeholder="0" min="0">
+                <div class="section-cta">
+                    Explore LLM providers
+                    <span class="section-cta-arrow">→</span>
                 </div>
-                <div class="control-group">
-                    <label for="minUptime">Min Uptime %</label>
-                    <input type="number" id="minUptime" placeholder="0" min="0" max="100">
+            </a>
+
+            <a href="gpu.html" class="section-card gpu">
+                <div class="section-icon">🖥️</div>
+                <div class="section-title">GPU Rental Pricing</div>
+                <div class="section-description">
+                    Compares GPU rental rates across RunPod and Vast.ai — spot pricing, on-demand rates, availability, and price-per-GB efficiency. Find the cheapest GPU for your workload across all cloud providers.
                 </div>
-            </div>
-            <div class="filter-hint">💡 Tip: Use column filters below the table headers for precise filtering</div>
+                <div class="section-features">
+                    <span class="feature-tag">RunPod</span>
+                    <span class="feature-tag">Vast.ai</span>
+                    <span class="feature-tag">Spot &amp; On-Demand</span>
+                    <span class="feature-tag">Price History</span>
+                    <span class="feature-tag">Daily Updates</span>
+                </div>
+                <div class="section-cta">
+                    Compare GPU prices
+                    <span class="section-cta-arrow">→</span>
+                </div>
+            </a>
         </div>
 
-        <div class="tabs">
-            <button class="tab active" data-view="providers">All Providers</button>
-            <button class="tab" data-view="geography">By Geography</button>
-            <button class="tab" data-view="performance">Performance Leaders</button>
-            <button class="tab" data-view="pricing">Pricing Comparison</button>
-            <button class="tab" data-view="comparisons">Model Comparisons</button>
-            <button class="tab" data-view="benchmarks">Benchmark Rankings</button>
-        </div>
-
-        <div id="providers-view" class="view active">
-            <div class="filters-summary" id="filters-summary" style="display: none;">
-                <span id="filters-text"></span>
-                <button class="clear-filters" onclick="clearFilters()">Clear All Filters</button>
-            </div>
-            <div id="providers-table-container"></div>
-        </div>
-
-        <div id="geography-view" class="view">
-            <div id="geography-container"></div>
-        </div>
-
-        <div id="performance-view" class="view">
-            <div id="performance-container"></div>
-        </div>
-
-        <div id="pricing-view" class="view">
-            <div id="pricing-container"></div>
-        </div>
-
-        <div id="comparisons-view" class="view">
-            <div id="comparisons-container"></div>
-        </div>
-
-        <div id="benchmarks-view" class="view">
-            <div id="benchmarks-container">
-                <div style="text-align:center;color:#a0a0a0;padding:60px;font-size:0.9em;">Loading benchmark data...</div>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal" id="provider-modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 id="modal-title">Provider Details</h2>
-                <button class="modal-close" onclick="closeModal()">&times;</button>
-            </div>
-            <div class="modal-body" id="modal-body">
-                <!-- Content will be dynamically inserted -->
-            </div>
-        </div>
+        <footer>
+            Data refreshed daily at 00:00 UTC.
+            Updated: <span id="last-updated">–</span>
+        </footer>
     </div>
 
     <script>
-        let infraData = null;
-        let benchmarkData = null;
-        let benchmarkMap = {};   // lowercase id -> benchmark entry
-        let _benchmarkLoaded = false;
-        let currentSort = { column: 'models', direction: 'desc' };
-        let filteredProviders = [];
-        let columnFilters = {
-            provider: '',
-            location: '',
-            models: { min: '', max: '' },
-            uptime: { min: '', max: '' },
-            latency: { min: '', max: '' },
-            price: { min: '', max: '' }
-        };
-
-        // Load data — tries hosted rollup first, falls back to local file
-        async function loadData() {
-            const sources = ['rollups/latest.json', 'infrastructure_provider_map.json'];
-            for (const src of sources) {
-                try {
-                    const response = await fetch(src);
-                    if (!response.ok) continue;
-                    infraData = await response.json();
-                    initializeUI();
-                    return;
-                } catch (_) {}
-            }
-            console.error('Could not load data from any source');
-            document.getElementById('providers-table-container').innerHTML =
-                '<div class="no-results">Error loading data. Make sure infrastructure_provider_map.json exists in the same directory.<br><br>If opening directly as a file, use index_standalone.html instead or run a web server.</div>';
-        }
-
-        function initializeUI() {
-            updateStats();
-            populateLocationFilter();
-            renderProvidersTable();
-            renderGeographyView();
-            renderPerformanceView();
-            renderPricingView();
-            renderComparisonsView();
-
-            // Setup event listeners
-            document.getElementById('search').addEventListener('input', applyFilters);
-            document.getElementById('location').addEventListener('change', applyFilters);
-            document.getElementById('minModels').addEventListener('input', applyFilters);
-            document.getElementById('minUptime').addEventListener('input', applyFilters);
-
-            document.querySelectorAll('.tab').forEach(tab => {
-                tab.addEventListener('click', () => switchTab(tab.dataset.view));
-            });
-        }
-
-        function updateStats() {
-            const providers = Object.values(infraData.providers);
-            const totalProviders = providers.length;
-            const totalModels = infraData.models_with_endpoints;
-
-            const countries = new Set(
-                providers
-                    .map(p => p.provider_info.headquarters)
-                    .filter(h => h)
-            );
-
-            const uptimes = providers
-                .map(p => p.performance_stats.avg_uptime)
-                .filter(u => u !== null);
-            const avgUptime = uptimes.length > 0
-                ? (uptimes.reduce((a, b) => a + b, 0) / uptimes.length).toFixed(1)
-                : 'N/A';
-
-            const statCards = document.querySelectorAll('.stat-number');
-            statCards[0].textContent = totalProviders;
-            statCards[1].textContent = totalModels;
-            statCards[2].textContent = countries.size;
-            statCards[3].textContent = avgUptime !== 'N/A' ? avgUptime + '%' : 'N/A';
-        }
-
-        function populateLocationFilter() {
-            const locations = new Set();
-            Object.values(infraData.providers).forEach(p => {
-                const hq = p.provider_info.headquarters;
-                if (hq) locations.add(hq);
-            });
-
-            const select = document.getElementById('location');
-            Array.from(locations).sort().forEach(loc => {
-                const option = document.createElement('option');
-                option.value = loc;
-                option.textContent = loc;
-                select.appendChild(option);
-            });
-        }
-
-        function applyColumnFilter(column, value, type = 'text') {
-            if (type === 'range') {
-                columnFilters[column] = value; // value is {min, max}
-            } else {
-                columnFilters[column] = value;
-            }
-            applyFilters();
-        }
-
-        function applyFilters() {
-            const search = document.getElementById('search').value.toLowerCase();
-            const location = document.getElementById('location').value;
-            const minModels = parseInt(document.getElementById('minModels').value) || 0;
-            const minUptime = parseFloat(document.getElementById('minUptime').value) || 0;
-
-            const providers = Object.entries(infraData.providers);
-
-            filteredProviders = providers.filter(([name, data]) => {
-                // Global search filter
-                if (search) {
-                    const matchesName = name.toLowerCase().includes(search);
-                    const matchesModel = data.models.some(m =>
-                        m.model_id.toLowerCase().includes(search) ||
-                        m.model_name.toLowerCase().includes(search)
-                    );
-                    if (!matchesName && !matchesModel) return false;
-                }
-
-                // Quick location filter
-                if (location && data.provider_info.headquarters !== location) {
-                    return false;
-                }
-
-                // Quick min models filter
-                if (data.total_models < minModels) return false;
-
-                // Quick min uptime filter
-                const uptime = data.performance_stats.avg_uptime;
-                if (uptime && uptime < minUptime) return false;
-
-                // Column filters
-                // Provider name filter
-                if (columnFilters.provider && !name.toLowerCase().includes(columnFilters.provider.toLowerCase())) {
-                    return false;
-                }
-
-                // Location filter (column)
-                if (columnFilters.location) {
-                    const hq = data.provider_info.headquarters || '';
-                    if (!hq.toLowerCase().includes(columnFilters.location.toLowerCase())) {
-                        return false;
-                    }
-                }
-
-                // Models filter
-                if (columnFilters.models.min && data.total_models < parseInt(columnFilters.models.min)) {
-                    return false;
-                }
-                if (columnFilters.models.max && data.total_models > parseInt(columnFilters.models.max)) {
-                    return false;
-                }
-
-                // Uptime filter
-                const uptimeVal = data.performance_stats.avg_uptime;
-                if (columnFilters.uptime.min && (!uptimeVal || uptimeVal < parseFloat(columnFilters.uptime.min))) {
-                    return false;
-                }
-                if (columnFilters.uptime.max && uptimeVal && uptimeVal > parseFloat(columnFilters.uptime.max)) {
-                    return false;
-                }
-
-                // Latency filter
-                const latencyVal = data.performance_stats.avg_latency_p50;
-                if (columnFilters.latency.min && (!latencyVal || latencyVal < parseFloat(columnFilters.latency.min))) {
-                    return false;
-                }
-                if (columnFilters.latency.max && latencyVal && latencyVal > parseFloat(columnFilters.latency.max)) {
-                    return false;
-                }
-
-                // Price filter
-                const totalPrice = data.pricing_range.min_prompt + data.pricing_range.min_completion;
-                if (columnFilters.price.min && totalPrice < parseFloat(columnFilters.price.min)) {
-                    return false;
-                }
-                if (columnFilters.price.max && totalPrice > parseFloat(columnFilters.price.max)) {
-                    return false;
-                }
-
-                return true;
-            });
-
-            updateFiltersSummary(search, location, minModels, minUptime);
-            renderProvidersTable();
-        }
-
-        function updateFiltersSummary(search, location, minModels, minUptime) {
-            const hasGlobalFilters = search || location || minModels || minUptime;
-            const hasColumnFilters =
-                columnFilters.provider || columnFilters.location ||
-                columnFilters.models.min || columnFilters.models.max ||
-                columnFilters.uptime.min || columnFilters.uptime.max ||
-                columnFilters.latency.min || columnFilters.latency.max ||
-                columnFilters.price.min || columnFilters.price.max;
-
-            const hasFilters = hasGlobalFilters || hasColumnFilters;
-            const summary = document.getElementById('filters-summary');
-
-            if (hasFilters) {
-                const parts = [];
-                if (search) parts.push(`Search: "${search}"`);
-                if (location) parts.push(`Location: ${location}`);
-                if (minModels) parts.push(`Min ${minModels} models`);
-                if (minUptime) parts.push(`Min ${minUptime}% uptime`);
-                if (hasColumnFilters) parts.push('Column filters active');
-
-                document.getElementById('filters-text').textContent =
-                    `Showing ${filteredProviders.length} of ${Object.keys(infraData.providers).length} providers${parts.length > 0 ? ' • ' + parts.join(' • ') : ''}`;
-                summary.style.display = 'flex';
-            } else {
-                summary.style.display = 'none';
-            }
-        }
-
-        function clearFilters() {
-            // Clear global filters
-            document.getElementById('search').value = '';
-            document.getElementById('location').value = '';
-            document.getElementById('minModels').value = '';
-            document.getElementById('minUptime').value = '';
-
-            // Clear column filters
-            columnFilters = {
-                provider: '',
-                location: '',
-                models: { min: '', max: '' },
-                uptime: { min: '', max: '' },
-                latency: { min: '', max: '' },
-                price: { min: '', max: '' }
-            };
-
-            // Clear column filter inputs
-            document.querySelectorAll('.column-filter').forEach(input => {
-                input.value = '';
-            });
-
-            applyFilters();
-        }
-
-        function renderProvidersTable() {
-            const providers = filteredProviders.length > 0
-                ? filteredProviders
-                : Object.entries(infraData.providers);
-
-            // Sort
-            const sortedProviders = [...providers].sort((a, b) => {
-                const aVal = getSortValue(a[1], currentSort.column);
-                const bVal = getSortValue(b[1], currentSort.column);
-
-                if (aVal === null) return 1;
-                if (bVal === null) return -1;
-
-                const comparison = aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
-                return currentSort.direction === 'asc' ? comparison : -comparison;
-            });
-
-            if (sortedProviders.length === 0) {
-                document.getElementById('providers-table-container').innerHTML =
-                    '<div class="no-results">No providers match your filters</div>';
-                return;
-            }
-
-            const html = `
-                <table>
-                    <thead>
-                        <tr>
-                            <th class="sortable ${currentSort.column === 'name' ? 'sort-' + currentSort.direction : ''}"
-                                onclick="sortTable('name')">Provider</th>
-                            <th class="sortable ${currentSort.column === 'location' ? 'sort-' + currentSort.direction : ''}"
-                                onclick="sortTable('location')">Location</th>
-                            <th class="sortable ${currentSort.column === 'models' ? 'sort-' + currentSort.direction : ''}"
-                                onclick="sortTable('models')">Models</th>
-                            <th class="sortable ${currentSort.column === 'uptime' ? 'sort-' + currentSort.direction : ''}"
-                                onclick="sortTable('uptime')">Uptime</th>
-                            <th class="sortable ${currentSort.column === 'latency' ? 'sort-' + currentSort.direction : ''}"
-                                onclick="sortTable('latency')">Latency</th>
-                            <th class="sortable ${currentSort.column === 'price' ? 'sort-' + currentSort.direction : ''}"
-                                onclick="sortTable('price')">Price Range (per 1M)</th>
-                            <th>Actions</th>
-                        </tr>
-                        <tr class="filter-row">
-                            <th>
-                                <input type="text" class="column-filter" placeholder="Filter..."
-                                    value="${columnFilters.provider}"
-                                    onchange="applyColumnFilter('provider', this.value)">
-                            </th>
-                            <th>
-                                <input type="text" class="column-filter" placeholder="Filter..."
-                                    value="${columnFilters.location}"
-                                    onchange="applyColumnFilter('location', this.value)">
-                            </th>
-                            <th>
-                                <div style="display: flex; gap: 4px;">
-                                    <input type="number" class="column-filter" placeholder="Min"
-                                        value="${columnFilters.models.min}"
-                                        style="width: 48%;"
-                                        onchange="applyColumnFilter('models', {min: this.value, max: columnFilters.models.max}, 'range')">
-                                    <input type="number" class="column-filter" placeholder="Max"
-                                        value="${columnFilters.models.max}"
-                                        style="width: 48%;"
-                                        onchange="applyColumnFilter('models', {min: columnFilters.models.min, max: this.value}, 'range')">
-                                </div>
-                            </th>
-                            <th>
-                                <div style="display: flex; gap: 4px;">
-                                    <input type="number" class="column-filter" placeholder="Min"
-                                        value="${columnFilters.uptime.min}"
-                                        style="width: 48%;"
-                                        onchange="applyColumnFilter('uptime', {min: this.value, max: columnFilters.uptime.max}, 'range')">
-                                    <input type="number" class="column-filter" placeholder="Max"
-                                        value="${columnFilters.uptime.max}"
-                                        style="width: 48%;"
-                                        onchange="applyColumnFilter('uptime', {min: columnFilters.uptime.min, max: this.value}, 'range')">
-                                </div>
-                            </th>
-                            <th>
-                                <div style="display: flex; gap: 4px;">
-                                    <input type="number" class="column-filter" placeholder="Min"
-                                        value="${columnFilters.latency.min}"
-                                        style="width: 48%;"
-                                        onchange="applyColumnFilter('latency', {min: this.value, max: columnFilters.latency.max}, 'range')">
-                                    <input type="number" class="column-filter" placeholder="Max"
-                                        value="${columnFilters.latency.max}"
-                                        style="width: 48%;"
-                                        onchange="applyColumnFilter('latency', {min: columnFilters.latency.min, max: this.value}, 'range')">
-                                </div>
-                            </th>
-                            <th>
-                                <div style="display: flex; gap: 4px;">
-                                    <input type="number" class="column-filter" placeholder="Min"
-                                        value="${columnFilters.price.min}"
-                                        style="width: 48%;" step="0.000001"
-                                        onchange="applyColumnFilter('price', {min: this.value, max: columnFilters.price.max}, 'range')">
-                                    <input type="number" class="column-filter" placeholder="Max"
-                                        value="${columnFilters.price.max}"
-                                        style="width: 48%;" step="0.000001"
-                                        onchange="applyColumnFilter('price', {min: columnFilters.price.min, max: this.value}, 'range')">
-                                </div>
-                            </th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${sortedProviders.map(([name, data]) => `
-                            <tr>
-                                <td>
-                                    <span class="provider-name" onclick="showProviderDetails('${escapeHtml(name)}')">${escapeHtml(name)}</span>
-                                </td>
-                                <td>${renderLocation(data.provider_info.headquarters)}</td>
-                                <td>${data.total_models}</td>
-                                <td>${renderMetric(data.performance_stats.avg_uptime, '%', 100)}</td>
-                                <td>${renderLatency(data.performance_stats.avg_latency_p50)}</td>
-                                <td class="price">${renderPriceRange(data.pricing_range)}</td>
-                                <td>
-                                    <button class="compare-btn" onclick="showProviderDetails('${escapeHtml(name)}')">
-                                        View Details
-                                    </button>
-                                </td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            `;
-
-            document.getElementById('providers-table-container').innerHTML = html;
-        }
-
-        function renderGeographyView() {
-            const byLocation = {};
-
-            Object.entries(infraData.providers).forEach(([name, data]) => {
-                const loc = data.provider_info.headquarters || 'Unknown';
-                if (!byLocation[loc]) {
-                    byLocation[loc] = [];
-                }
-                byLocation[loc].push([name, data]);
-            });
-
-            const sortedLocations = Object.entries(byLocation)
-                .sort((a, b) => b[1].length - a[1].length);
-
-            const html = sortedLocations.map(([location, providers]) => `
-                <div style="margin-bottom: 30px;">
-                    <h2 style="color: #667eea; margin-bottom: 15px;">
-                        ${renderLocation(location === 'Unknown' ? null : location)}
-                        (${providers.length} providers, ${providers.reduce((sum, [_, p]) => sum + p.total_models, 0)} models)
-                    </h2>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Provider</th>
-                                <th>Models</th>
-                                <th>Uptime</th>
-                                <th>Latency</th>
-                                <th>Price Range</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${providers.map(([name, data]) => `
-                                <tr>
-                                    <td>
-                                        <span class="provider-name" onclick="showProviderDetails('${escapeHtml(name)}')">${escapeHtml(name)}</span>
-                                    </td>
-                                    <td>${data.total_models}</td>
-                                    <td>${renderMetric(data.performance_stats.avg_uptime, '%', 100)}</td>
-                                    <td>${renderLatency(data.performance_stats.avg_latency_p50)}</td>
-                                    <td class="price">${renderPriceRange(data.pricing_range)}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            `).join('');
-
-            document.getElementById('geography-container').innerHTML = html;
-        }
-
-        function renderPerformanceView() {
-            const providers = Object.entries(infraData.providers);
-
-            // Best uptime
-            const bestUptime = [...providers]
-                .filter(([_, p]) => p.performance_stats.avg_uptime !== null)
-                .sort((a, b) => b[1].performance_stats.avg_uptime - a[1].performance_stats.avg_uptime)
-                .slice(0, 15);
-
-            // Best latency
-            const bestLatency = [...providers]
-                .filter(([_, p]) => p.performance_stats.avg_latency_p50 !== null)
-                .sort((a, b) => a[1].performance_stats.avg_latency_p50 - b[1].performance_stats.avg_latency_p50)
-                .slice(0, 15);
-
-            const html = `
-                <div style="margin-bottom: 40px;">
-                    <h2 style="color: #667eea; margin-bottom: 15px;">⚡ Best Uptime (Top 15)</h2>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Rank</th>
-                                <th>Provider</th>
-                                <th>Location</th>
-                                <th>Models</th>
-                                <th>Uptime (24h)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${bestUptime.map(([name, data], idx) => `
-                                <tr>
-                                    <td><strong>${idx + 1}</strong></td>
-                                    <td><span class="provider-name" onclick="showProviderDetails('${escapeHtml(name)}')">${escapeHtml(name)}</span></td>
-                                    <td>${renderLocation(data.provider_info.headquarters)}</td>
-                                    <td>${data.total_models}</td>
-                                    <td>${renderMetric(data.performance_stats.avg_uptime, '%', 100)}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-
-                <div>
-                    <h2 style="color: #667eea; margin-bottom: 15px;">🚀 Lowest Latency (Top 15)</h2>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Rank</th>
-                                <th>Provider</th>
-                                <th>Location</th>
-                                <th>Models</th>
-                                <th>Latency (p50)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${bestLatency.map(([name, data], idx) => `
-                                <tr>
-                                    <td><strong>${idx + 1}</strong></td>
-                                    <td><span class="provider-name" onclick="showProviderDetails('${escapeHtml(name)}')">${escapeHtml(name)}</span></td>
-                                    <td>${renderLocation(data.provider_info.headquarters)}</td>
-                                    <td>${data.total_models}</td>
-                                    <td>${renderLatency(data.performance_stats.avg_latency_p50)}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            `;
-
-            document.getElementById('performance-container').innerHTML = html;
-        }
-
-        function renderPricingView() {
-            // Collect all model offerings
-            const offerings = [];
-            Object.entries(infraData.providers).forEach(([providerName, data]) => {
-                data.models.forEach(model => {
-                    offerings.push({
-                        provider: providerName,
-                        modelId: model.model_id,
-                        modelName: model.model_name,
-                        totalPrice: model.pricing.prompt + model.pricing.completion,
-                        promptPrice: model.pricing.prompt,
-                        completionPrice: model.pricing.completion
-                    });
-                });
-            });
-
-            // Sort by total price
-            offerings.sort((a, b) => a.totalPrice - b.totalPrice);
-
-            // Free models
-            const freeModels = offerings.filter(o => o.totalPrice === 0).slice(0, 20);
-
-            // Cheapest paid models
-            const cheapestPaid = offerings.filter(o => o.totalPrice > 0).slice(0, 20);
-
-            const html = `
-                <div style="margin-bottom: 40px;">
-                    <h2 style="color: #667eea; margin-bottom: 15px;">🆓 Free Models (Top 20)</h2>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Model</th>
-                                <th>Provider</th>
-                                <th>Price</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${freeModels.map(o => `
-                                <tr>
-                                    <td>${escapeHtml(o.modelId)}</td>
-                                    <td><span class="provider-name" onclick="showProviderDetails('${escapeHtml(o.provider)}')">${escapeHtml(o.provider)}</span></td>
-                                    <td class="price">FREE</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-
-                <div>
-                    <h2 style="color: #667eea; margin-bottom: 15px;">💰 Cheapest Paid Models (Top 20)</h2>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Model</th>
-                                <th>Provider</th>
-                                <th>Prompt (per 1M)</th>
-                                <th>Completion (per 1M)</th>
-                                <th>Total (per 1M)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${cheapestPaid.map(o => `
-                                <tr>
-                                    <td>${escapeHtml(o.modelId)}</td>
-                                    <td><span class="provider-name" onclick="showProviderDetails('${escapeHtml(o.provider)}')">${escapeHtml(o.provider)}</span></td>
-                                    <td class="price">$${(o.promptPrice * 1000000).toFixed(4)}</td>
-                                    <td class="price">$${(o.completionPrice * 1000000).toFixed(4)}</td>
-                                    <td class="price"><strong>$${(o.totalPrice * 1000000).toFixed(4)}</strong></td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            `;
-
-            document.getElementById('pricing-container').innerHTML = html;
-        }
-
-        function showProviderDetails(providerName) {
-            const data = infraData.providers[providerName];
-            const info = data.provider_info;
-            const perf = data.performance_stats;
-            const pr = data.pricing_range;
-
-            const modalBody = `
-                ${info.company_description ? `
-                    <div style="margin-bottom: 20px; padding: 15px; background: #0f1419; border-radius: 8px; border: 1px solid #2a2f3e;">
-                        <div class="info-label">About</div>
-                        <div style="margin-top: 8px; color: #e0e0e0; line-height: 1.6;">${escapeHtml(info.company_description)}</div>
-                    </div>
-                ` : ''}
-
-                <div class="info-grid">
-                    <div class="info-item">
-                        <div class="info-label">Location</div>
-                        <div class="info-value">${renderLocation(info.headquarters)}${info.headquarters_city ? `, ${escapeHtml(info.headquarters_city)}` : ''}</div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label">Total Models</div>
-                        <div class="info-value">${data.total_models}</div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label">Avg Uptime (24h)</div>
-                        <div class="info-value">${perf.avg_uptime ? perf.avg_uptime.toFixed(2) + '%' : 'N/A'}</div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label">Avg Latency (p50)</div>
-                        <div class="info-value">${perf.avg_latency_p50 ? Math.round(perf.avg_latency_p50) + 'ms' : 'N/A'}</div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label">Datacenters</div>
-                        <div class="info-value">${info.datacenters && info.datacenters.length > 0 ? info.datacenters.join(', ') : 'N/A'}</div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label">Tags</div>
-                        <div class="info-value" style="font-size: 0.9em;">${data.tags.join(', ')}</div>
-                    </div>
-                </div>
-
-                <div class="info-grid">
-                    <div class="info-item">
-                        <div class="info-label">Prompt Price Range (per 1M tokens)</div>
-                        <div class="info-value price">$${(pr.min_prompt * 1000000).toFixed(4)} - $${(pr.max_prompt * 1000000).toFixed(4)}</div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label">Completion Price Range (per 1M tokens)</div>
-                        <div class="info-value price">$${(pr.min_completion * 1000000).toFixed(4)} - $${(pr.max_completion * 1000000).toFixed(4)}</div>
-                    </div>
-                </div>
-
-                ${info.homepage || info.contact_email || info.support_url || info.privacy_policy || info.terms_of_service || info.status_page ? `
-                    <div style="margin: 20px 0; padding: 15px; background: #0f1419; border-radius: 8px; border: 1px solid #2a2f3e;">
-                        <div class="info-label">Links & Contact</div>
-                        <div style="display: flex; gap: 15px; margin-top: 10px; flex-wrap: wrap;">
-                            ${info.homepage ? `<a href="${info.homepage}" target="_blank" style="color: #667eea; font-weight: 600;">🏠 Homepage</a>` : ''}
-                            ${info.contact_email ? `<a href="mailto:${info.contact_email}" style="color: #667eea;">📧 ${info.contact_email}</a>` : ''}
-                            ${info.support_url ? `<a href="${info.support_url}" target="_blank" style="color: #667eea;">💬 Support</a>` : ''}
-                            ${info.status_page ? `<a href="${info.status_page}" target="_blank" style="color: #667eea;">📊 Status</a>` : ''}
-                            ${info.privacy_policy ? `<a href="${info.privacy_policy}" target="_blank" style="color: #a0a0a0; font-size: 0.9em;">Privacy</a>` : ''}
-                            ${info.terms_of_service ? `<a href="${info.terms_of_service}" target="_blank" style="color: #a0a0a0; font-size: 0.9em;">Terms</a>` : ''}
-                        </div>
-                    </div>
-                ` : ''}
-
-                <div style="margin: 20px 0; padding: 15px; background: #0f1419; border-radius: 8px; border: 1px solid #2a2f3e;">
-                    <div class="info-label" style="margin-bottom: 12px;">Avg Pricing History (per 1M tokens)</div>
-                    <div id="history-chart-container" style="position:relative; height:160px;">
-                        <canvas id="history-chart"></canvas>
-                    </div>
-                </div>
-
-                <div class="model-list">
-                    <h3>Models (${data.total_models})</h3>
-                    <div style="max-height: 400px; overflow-y: auto;">
-                        ${data.models.slice(0, 50).map(model => `
-                            <div class="model-item">
-                                <div class="model-header">
-                                    <div class="model-id">${escapeHtml(model.model_id)}</div>
-                                    <div class="model-pricing">
-                                        $${(model.pricing.prompt * 1000000).toFixed(4)} / $${(model.pricing.completion * 1000000).toFixed(4)} per 1M
-                                    </div>
-                                </div>
-                                <div class="model-details">
-                                    <span>Context: ${model.context_length.toLocaleString()} tokens</span>
-                                    ${model.performance.uptime_24h ? `<span>Uptime: ${model.performance.uptime_24h.toFixed(1)}%</span>` : ''}
-                                    ${model.performance.latency_30m && model.performance.latency_30m.p50 ?
-                                        `<span>Latency: ${Math.round(model.performance.latency_30m.p50)}ms</span>` : ''}
-                                </div>
-                            </div>
-                        `).join('')}
-                        ${data.total_models > 50 ? `<div style="text-align: center; padding: 15px; color: #a0a0a0;">... and ${data.total_models - 50} more models</div>` : ''}
-                    </div>
-                </div>
-            `;
-
-            document.getElementById('modal-title').textContent = providerName;
-            document.getElementById('modal-body').innerHTML = modalBody;
-            document.getElementById('provider-modal').classList.add('active');
-            loadProviderHistory(providerName);
-        }
-
-        let _historyChart = null;
-
-        async function loadProviderHistory(providerName) {
-            const container = document.getElementById('history-chart-container');
-            if (!container) return;
-
-            const safeName = providerName.replace(/[/\s]/g, '_');
+        async function loadStats() {
+            // Load LLM stats
             try {
-                const resp = await fetch(`rollups/providers/${safeName}.json`);
-                if (!resp.ok) {
-                    container.innerHTML = '<div style="text-align:center;color:#a0a0a0;padding:20px;font-size:0.85em;">No history yet — check back after the first daily run.</div>';
-                    return;
-                }
-                const data = await resp.json();
-                if (!data.history || data.history.length < 2) {
-                    container.innerHTML = '<div style="text-align:center;color:#a0a0a0;padding:20px;font-size:0.85em;">Only one data point so far — history builds up daily.</div>';
-                    return;
-                }
-
-                // Rebuild canvas (Chart.js needs a fresh element after innerHTML swap)
-                container.innerHTML = '<canvas id="history-chart"></canvas>';
-                const ctx = document.getElementById('history-chart').getContext('2d');
-
-                if (_historyChart) { _historyChart.destroy(); _historyChart = null; }
-
-                _historyChart = new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: data.history.map(h => h.date),
-                        datasets: [
-                            {
-                                label: 'Avg Prompt',
-                                data: data.history.map(h => h.avg_prompt_price != null ? +(h.avg_prompt_price * 1e6).toFixed(6) : null),
-                                borderColor: '#667eea',
-                                backgroundColor: 'rgba(102,126,234,0.1)',
-                                tension: 0.3,
-                                fill: true,
-                                pointRadius: 3,
-                            },
-                            {
-                                label: 'Avg Completion',
-                                data: data.history.map(h => h.avg_completion_price != null ? +(h.avg_completion_price * 1e6).toFixed(6) : null),
-                                borderColor: '#764ba2',
-                                backgroundColor: 'rgba(118,75,162,0.1)',
-                                tension: 0.3,
-                                fill: true,
-                                pointRadius: 3,
-                            },
-                        ],
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        interaction: { mode: 'index', intersect: false },
-                        plugins: {
-                            legend: { labels: { color: '#e0e0e0', boxWidth: 12 } },
-                            tooltip: {
-                                callbacks: {
-                                    label: ctx => `${ctx.dataset.label}: $${ctx.parsed.y.toFixed(4)} / 1M`,
-                                },
-                            },
-                        },
-                        scales: {
-                            x: { ticks: { color: '#a0a0a0', maxTicksLimit: 10 }, grid: { color: '#2a2f3e' } },
-                            y: {
-                                ticks: { color: '#a0a0a0', callback: v => `$${v.toFixed(4)}` },
-                                grid: { color: '#2a2f3e' },
-                            },
-                        },
-                    },
-                });
-            } catch (e) {
-                container.innerHTML = '<div style="text-align:center;color:#a0a0a0;padding:20px;font-size:0.85em;">No history yet — check back after the first daily run.</div>';
-            }
-        }
-
-        function closeModal() {
-            if (_historyChart) { _historyChart.destroy(); _historyChart = null; }
-            document.getElementById('provider-modal').classList.remove('active');
-        }
-
-        function switchTab(view) {
-            document.querySelectorAll('.tab').forEach(tab => {
-                tab.classList.toggle('active', tab.dataset.view === view);
-            });
-            document.querySelectorAll('.view').forEach(v => {
-                v.classList.toggle('active', v.id === view + '-view');
-            });
-            if (view === 'benchmarks' && !_benchmarkLoaded) {
-                _benchmarkLoaded = true;
-                loadAndRenderBenchmarks();
-            }
-        }
-
-        function sortTable(column) {
-            if (currentSort.column === column) {
-                currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
-            } else {
-                currentSort.column = column;
-                currentSort.direction = 'desc';
-            }
-            renderProvidersTable();
-        }
-
-        function getSortValue(provider, column) {
-            switch (column) {
-                case 'name':
-                    return Object.keys(infraData.providers).find(k => infraData.providers[k] === provider);
-                case 'location':
-                    return provider.provider_info.headquarters || 'ZZZ';
-                case 'models':
-                    return provider.total_models;
-                case 'uptime':
-                    return provider.performance_stats.avg_uptime;
-                case 'latency':
-                    return provider.performance_stats.avg_latency_p50;
-                case 'price':
-                    return provider.pricing_range.min_prompt + provider.pricing_range.min_completion;
-                default:
-                    return 0;
-            }
-        }
-
-        function renderLocation(hq) {
-            if (!hq) return '<span class="badge badge-unknown">Unknown</span>';
-            const classes = {
-                'US': 'badge-us',
-                'CN': 'badge-cn',
-                'SG': 'badge-sg',
-                'FR': 'badge-fr',
-                'IL': 'badge-il',
-                'NL': 'badge-nl',
-                'UK': 'badge-uk'
-            };
-            return `<span class="badge ${classes[hq] || 'badge-unknown'}">${hq}</span>`;
-        }
-
-        function renderMetric(value, suffix, max) {
-            if (value === null) return 'N/A';
-            const percentage = (value / max) * 100;
-            return `
-                <div class="metric">
-                    <div class="metric-bar">
-                        <div class="metric-fill" style="width: ${percentage}%"></div>
-                    </div>
-                    <span class="metric-value">${value.toFixed(1)}${suffix}</span>
-                </div>
-            `;
-        }
-
-        function renderLatency(value) {
-            if (value === null) return 'N/A';
-            return `${Math.round(value)}ms`;
-        }
-
-        function renderPriceRange(pr) {
-            const min = (pr.min_prompt + pr.min_completion) * 1000000;
-            const max = (pr.max_prompt + pr.max_completion) * 1000000;
-            if (min === 0 && max === 0) return 'FREE';
-            // Smart formatting based on magnitude
-            if (max < 1) {
-                return `$${min.toFixed(4)} - $${max.toFixed(4)}`;
-            } else if (max < 100) {
-                return `$${min.toFixed(2)} - $${max.toFixed(2)}`;
-            } else {
-                return `$${min.toFixed(0)} - $${max.toFixed(0)}`;
-            }
-        }
-
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        // Close modal on outside click
-        document.getElementById('provider-modal').addEventListener('click', (e) => {
-            if (e.target.id === 'provider-modal') {
-                closeModal();
-            }
-        });
-
-        // Close modal on Escape key
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                closeModal();
-            }
-        });
-
-        // ----------------------------------------------------------------
-        // Comparisons view
-        // ----------------------------------------------------------------
-
-        const CHART_COLORS = [
-            '#667eea','#4ade80','#f59e0b','#ef4444','#06b6d4',
-            '#ec4899','#84cc16','#f97316','#8b5cf6','#764ba2',
-        ];
-
-        let _modelCharts = new Map();
-
-        function renderComparisonsView() {
-            // Build model -> providers map from the flat provider data
-            const modelMap = {};
-            Object.entries(infraData.providers).forEach(([providerName, providerData]) => {
-                providerData.models.forEach(model => {
-                    if (!modelMap[model.model_id]) {
-                        modelMap[model.model_id] = {
-                            modelId: model.model_id,
-                            modelName: model.model_name,
-                            providers: [],
-                        };
+                const r = await fetch('rollups/latest.json');
+                if (r.ok) {
+                    const d = await r.json();
+                    document.getElementById('stat-providers').textContent =
+                        Object.keys(d.providers || {}).length;
+                    document.getElementById('stat-models').textContent =
+                        d.models_with_endpoints || '–';
+                    const ts = d.generated_at;
+                    if (ts) {
+                        document.getElementById('last-updated').textContent =
+                            new Date(ts).toLocaleString();
                     }
-                    modelMap[model.model_id].providers.push({
-                        providerName,
-                        promptPrice: model.pricing.prompt,
-                        completionPrice: model.pricing.completion,
-                        totalPrice: model.pricing.prompt + model.pricing.completion,
-                        uptime24h: model.performance.uptime_24h,
-                        latencyP50: model.performance.latency_30m ? model.performance.latency_30m.p50 : null,
-                        hq: infraData.providers[providerName].provider_info.headquarters || null,
-                    });
-                });
-            });
-
-            const multiProvider = Object.values(modelMap)
-                .filter(m => m.providers.length > 1)
-                .sort((a, b) => b.providers.length - a.providers.length);
-
-            const rows = multiProvider.map(m => buildComparisonCard(m)).join('');
-
-            document.getElementById('comparisons-container').innerHTML = `
-                <div style="margin-bottom:20px; display:flex; gap:15px; align-items:center; flex-wrap:wrap;">
-                    <input type="text" id="comparison-search"
-                           placeholder="Filter models..."
-                           style="flex:1; max-width:400px;"
-                           oninput="filterComparisons(this.value)">
-                    <span id="comparison-count" style="color:#a0a0a0; font-size:0.9em; white-space:nowrap;">
-                        ${multiProvider.length} models available from 2+ providers
-                    </span>
-                </div>
-                <div id="comparison-list">${rows}</div>
-            `;
-        }
-
-        function buildComparisonCard(modelData) {
-            const sorted = [...modelData.providers].sort((a, b) => a.totalPrice - b.totalPrice);
-            const minPrice = sorted[0].totalPrice;
-            const maxPrice = sorted[sorted.length - 1].totalPrice;
-            const spread = minPrice > 0
-                ? Math.round((maxPrice - minPrice) / minPrice * 100)
-                : null;
-
-            const safeId = modelData.modelId.replace(/[^a-zA-Z0-9]/g, '_');
-            const cheapestFmt = minPrice === 0 ? 'FREE' : `$${(minPrice * 1e6).toFixed(4)}/1M`;
-            const spreadHtml = spread && spread > 0
-                ? `<span class="comparison-spread">${spread}% spread</span>`
-                : '';
-
-            const bm = getBenchmark(modelData.modelId);
-            const rankBadge = bm
-                ? `<span class="benchmark-rank-badge" title="Open LLM Leaderboard rank · avg ${bm.avg}">🏆 #${bm.rank} · ${bm.avg}</span>`
-                : '';
-
-            const rows = sorted.map(p => {
-                const isCheapest = p.totalPrice === minPrice;
-                const cls = isCheapest ? 'class="cheapest-price"' : '';
-                const promptFmt  = p.promptPrice  === 0 ? 'FREE' : `$${(p.promptPrice  * 1e6).toFixed(4)}`;
-                const completionFmt = p.completionPrice === 0 ? 'FREE' : `$${(p.completionPrice * 1e6).toFixed(4)}`;
-                const totalFmt   = p.totalPrice === 0 ? 'FREE'
-                    : `$${(p.totalPrice * 1e6).toFixed(4)}${isCheapest ? ' ✓' : ''}`;
-                const uptime  = p.uptime24h  != null ? `${p.uptime24h.toFixed(1)}%`  : 'N/A';
-                const latency = p.latencyP50 != null ? `${Math.round(p.latencyP50)}ms` : 'N/A';
-                return [
-                    `<tr>`,
-                    `<td><span class="provider-name" data-p="${escapeHtml(p.providerName)}" onclick="showProviderDetails(this.dataset.p)">${escapeHtml(p.providerName)}</span></td>`,
-                    `<td>${renderLocation(p.hq)}</td>`,
-                    `<td class="price" ${cls}>${promptFmt}</td>`,
-                    `<td class="price" ${cls}>${completionFmt}</td>`,
-                    `<td class="price" ${cls}>${totalFmt}</td>`,
-                    `<td>${uptime}</td>`,
-                    `<td>${latency}</td>`,
-                    `</tr>`,
-                ].join('');
-            }).join('');
-
-            return `
-                <div class="comparison-model-card" data-model-id="${escapeHtml(modelData.modelId)}" data-safe-id="${safeId}">
-                    <div class="comparison-model-header"
-                         data-model-id="${escapeHtml(modelData.modelId)}"
-                         data-safe-id="${safeId}"
-                         onclick="toggleModelComparison(this)">
-                        <span class="comparison-chevron" id="chevron-${safeId}">&#9654;</span>
-                        <span class="comparison-model-name" title="${escapeHtml(modelData.modelId)}">${escapeHtml(modelData.modelName || modelData.modelId)}</span>
-                        ${rankBadge}
-                        <span class="comparison-cheapest">${cheapestFmt}${spreadHtml}</span>
-                        <span class="comparison-provider-badge">${modelData.providers.length} providers</span>
-                    </div>
-                    <div class="comparison-detail" id="detail-${safeId}">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th style="cursor:default">Provider</th>
-                                    <th style="cursor:default">Location</th>
-                                    <th style="cursor:default">Prompt /1M</th>
-                                    <th style="cursor:default">Completion /1M</th>
-                                    <th style="cursor:default">Total /1M</th>
-                                    <th style="cursor:default">Uptime</th>
-                                    <th style="cursor:default">Latency</th>
-                                </tr>
-                            </thead>
-                            <tbody>${rows}</tbody>
-                        </table>
-                        <div class="comparison-history-section">
-                            <div class="info-label" style="margin-bottom:10px;">Price History — combined prompt + completion per 1M tokens</div>
-                            <div id="history-content-${safeId}" style="position:relative; height:180px;">
-                                <div style="text-align:center; color:#a0a0a0; padding:40px; font-size:0.85em;">Expand to load history...</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>`;
-        }
-
-        function toggleModelComparison(headerEl) {
-            const safeId  = headerEl.dataset.safeId;
-            const modelId = headerEl.dataset.modelId;
-            const detail  = document.getElementById(`detail-${safeId}`);
-            const chevron = document.getElementById(`chevron-${safeId}`);
-            const isOpen  = detail.classList.contains('open');
-
-            if (isOpen) {
-                detail.classList.remove('open');
-                headerEl.classList.remove('expanded');
-                chevron.classList.remove('open');
-                if (_modelCharts.has(safeId)) {
-                    _modelCharts.get(safeId).destroy();
-                    _modelCharts.delete(safeId);
                 }
-            } else {
-                detail.classList.add('open');
-                headerEl.classList.add('expanded');
-                chevron.classList.add('open');
-                loadModelHistory(safeId, modelId);
-            }
-        }
+            } catch (_) {}
 
-        async function loadModelHistory(safeId, modelId) {
-            const container = document.getElementById(`history-content-${safeId}`);
-            if (!container || _modelCharts.has(safeId)) return;
-
-            const safeModelId = modelId.replace(':', '_');
+            // Load benchmark stats
             try {
-                const resp = await fetch(`rollups/models/${safeModelId}.json`);
-                if (!resp.ok) throw new Error('not found');
-                const data = await resp.json();
-
-                if (!data.history || data.history.length < 2) {
-                    container.innerHTML = '<div style="text-align:center;color:#a0a0a0;padding:20px;font-size:0.85em;">Only one data point so far — history builds up daily.</div>';
-                    return;
+                const r = await fetch('rollups/benchmarks.json');
+                if (r.ok) {
+                    const d = await r.json();
+                    document.getElementById('stat-benchmarks').textContent =
+                        (d.total || 0).toLocaleString();
                 }
+            } catch (_) {}
 
-                // Collect all provider names across all dates
-                const providerSet = new Set();
-                data.history.forEach(h => h.providers.forEach(p => providerSet.add(p.provider)));
-                const providers = Array.from(providerSet).sort();
-
-                const datasets = providers.map((name, i) => ({
-                    label: name,
-                    data: data.history.map(h => {
-                        const entry = h.providers.find(p => p.provider === name);
-                        return entry != null
-                            ? +((entry.prompt_price + entry.completion_price) * 1e6).toFixed(6)
-                            : null;
-                    }),
-                    borderColor: CHART_COLORS[i % CHART_COLORS.length],
-                    backgroundColor: CHART_COLORS[i % CHART_COLORS.length] + '22',
-                    tension: 0.3,
-                    fill: false,
-                    pointRadius: 3,
-                    spanGaps: true,
-                }));
-
-                container.innerHTML = '<canvas></canvas>';
-                const ctx = container.querySelector('canvas').getContext('2d');
-                const chart = new Chart(ctx, {
-                    type: 'line',
-                    data: { labels: data.history.map(h => h.date), datasets },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        interaction: { mode: 'index', intersect: false },
-                        plugins: {
-                            legend: { labels: { color: '#e0e0e0', boxWidth: 10, font: { size: 11 } } },
-                            tooltip: {
-                                callbacks: {
-                                    label: c => `${c.dataset.label}: $${c.parsed.y != null ? c.parsed.y.toFixed(4) : 'N/A'}/1M`,
-                                },
-                            },
-                        },
-                        scales: {
-                            x: { ticks: { color: '#a0a0a0', maxTicksLimit: 10 }, grid: { color: '#2a2f3e' } },
-                            y: {
-                                ticks: { color: '#a0a0a0', callback: v => `$${v.toFixed(4)}` },
-                                grid: { color: '#2a2f3e' },
-                            },
-                        },
-                    },
-                });
-                _modelCharts.set(safeId, chart);
-            } catch (e) {
-                container.innerHTML = '<div style="text-align:center;color:#a0a0a0;padding:20px;font-size:0.85em;">No history yet — check back after the first daily run.</div>';
-            }
-        }
-
-        function filterComparisons(query) {
-            const q = query.toLowerCase();
-            let visible = 0;
-            document.querySelectorAll('#comparison-list .comparison-model-card').forEach(card => {
-                const match = !q || card.dataset.modelId.toLowerCase().includes(q);
-                card.style.display = match ? '' : 'none';
-                if (match) visible++;
-            });
-            const el = document.getElementById('comparison-count');
-            if (el) el.textContent = `${visible} models available from 2+ providers`;
-        }
-
-        // ----------------------------------------------------------------
-        // Benchmark Rankings
-        // ----------------------------------------------------------------
-
-        async function loadAndRenderBenchmarks() {
-            const container = document.getElementById('benchmarks-container');
+            // Load GPU stats
             try {
-                const resp = await fetch('rollups/benchmarks.json');
-                if (!resp.ok) throw new Error('not found');
-                benchmarkData = await resp.json();
-
-                // Build lookup map
-                benchmarkData.models.forEach(m => {
-                    benchmarkMap[m.id.toLowerCase()] = m;
-                    const parts = m.id.split('/');
-                    if (parts.length > 1) {
-                        // index by name-only as fallback (do not overwrite if already set)
-                        const nameKey = parts[parts.length - 1].toLowerCase();
-                        if (!benchmarkMap[nameKey]) benchmarkMap[nameKey] = m;
-                    }
-                });
-
-                renderBenchmarkView(container);
-            } catch (e) {
-                container.innerHTML = '<div style="text-align:center;color:#a0a0a0;padding:60px;">Benchmark data not available yet — it will be populated after the first daily Lambda run.</div>';
-            }
-        }
-
-        function getBenchmark(modelId) {
-            const direct = benchmarkMap[modelId.toLowerCase()];
-            if (direct) return direct;
-            const namePart = modelId.includes('/')
-                ? modelId.split('/').pop().toLowerCase()
-                : modelId.toLowerCase();
-            return benchmarkMap[namePart] || null;
-        }
-
-        function renderBenchmarkView(container) {
-            // Build model -> providers map
-            const modelProviderMap = {};
-            Object.entries(infraData.providers).forEach(([providerName, providerData]) => {
-                providerData.models.forEach(model => {
-                    if (!modelProviderMap[model.model_id]) {
-                        modelProviderMap[model.model_id] = {
-                            modelId: model.model_id,
-                            modelName: model.model_name,
-                            providers: [],
-                        };
-                    }
-                    const totalPrice = model.pricing.prompt + model.pricing.completion;
-                    modelProviderMap[model.model_id].providers.push({
-                        providerName,
-                        promptPrice: model.pricing.prompt,
-                        completionPrice: model.pricing.completion,
-                        totalPrice,
-                        uptime24h: model.performance.uptime_24h,
-                        latencyP50: model.performance.latency_30m ? model.performance.latency_30m.p50 : null,
-                        hq: infraData.providers[providerName].provider_info.headquarters || null,
-                    });
-                });
-            });
-
-            // Match benchmark models to OpenRouter models
-            const ranked = benchmarkData.models
-                .map(bm => {
-                    const orData = modelProviderMap[bm.id.toLowerCase()] ||
-                        Object.values(modelProviderMap).find(m =>
-                            m.modelId.toLowerCase() === bm.id.toLowerCase() ||
-                            m.modelId.split('/').pop().toLowerCase() === bm.id.split('/').pop().toLowerCase()
-                        ) || null;
-                    return { bm, orData };
-                });
-
-            const onOpenRouter = ranked.filter(r => r.orData);
-            const allRows = ranked;
-
-            container.innerHTML = `
-                <div class="benchmark-controls">
-                    <input type="text" id="bm-search" placeholder="Filter models..."
-                           style="flex:1; max-width:400px;"
-                           oninput="filterBenchmarks()">
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="bm-or-only" checked onchange="filterBenchmarks()">
-                        OpenRouter only
-                    </label>
-                    <span id="bm-count" style="color:#a0a0a0; font-size:0.9em; white-space:nowrap;">
-                        ${onOpenRouter.length} models ranked (${benchmarkData.total} total)
-                    </span>
-                </div>
-                <div class="benchmark-table-container">
-                    <table class="benchmark-table">
-                        <thead>
-                            <tr>
-                                <th style="cursor:default;text-align:center;width:60px">Rank</th>
-                                <th style="cursor:default">Model</th>
-                                <th style="cursor:default;text-align:right">Avg ⬆</th>
-                                <th style="cursor:default;text-align:right">IFEval</th>
-                                <th style="cursor:default;text-align:right">BBH</th>
-                                <th style="cursor:default;text-align:right">MATH</th>
-                                <th style="cursor:default;text-align:right">GPQA</th>
-                                <th style="cursor:default;text-align:right">MUSR</th>
-                                <th style="cursor:default;text-align:right">MMLU-Pro</th>
-                                <th style="cursor:default;text-align:center">Providers</th>
-                                <th style="cursor:default;text-align:right">Cheapest /1M</th>
-                            </tr>
-                        </thead>
-                        <tbody id="bm-tbody">
-                            ${buildBenchmarkRows(allRows)}
-                        </tbody>
-                    </table>
-                </div>
-            `;
-            filterBenchmarks();
-        }
-
-        function buildBenchmarkRows(rows) {
-            return rows.map(({ bm, orData }) => {
-                const safeId = bm.id.replace(/[^a-zA-Z0-9]/g, '_');
-                const providers = orData ? orData.providers.sort((a, b) => a.totalPrice - b.totalPrice) : [];
-                const cheapest = providers[0];
-                const cheapestFmt = !cheapest ? '—'
-                    : cheapest.totalPrice === 0 ? '<span style="color:#4ade80">FREE</span>'
-                    : `<span style="color:#4ade80">$${(cheapest.totalPrice * 1e6).toFixed(4)}</span>`;
-                const providerCount = providers.length > 0
-                    ? `<span style="color:#667eea;font-weight:600">${providers.length}</span>`
-                    : '<span style="color:#555">—</span>';
-                const barW = Math.round(bm.avg);
-
-                const providerRows = providers.map(p => {
-                    const isCheapest = p.totalPrice === cheapest.totalPrice;
-                    const cls = isCheapest ? 'class="cheapest-price"' : '';
-                    const pFmt = p.promptPrice === 0 ? 'FREE' : `$${(p.promptPrice * 1e6).toFixed(4)}`;
-                    const cFmt = p.completionPrice === 0 ? 'FREE' : `$${(p.completionPrice * 1e6).toFixed(4)}`;
-                    const tFmt = p.totalPrice === 0 ? 'FREE' : `$${(p.totalPrice * 1e6).toFixed(4)}${isCheapest ? ' ✓' : ''}`;
-                    const uptime = p.uptime24h != null ? `${p.uptime24h.toFixed(1)}%` : 'N/A';
-                    const latency = p.latencyP50 != null ? `${Math.round(p.latencyP50)}ms` : 'N/A';
-                    return `<tr>
-                        <td><span class="provider-name" data-p="${escapeHtml(p.providerName)}" onclick="event.stopPropagation();showProviderDetails(this.dataset.p)">${escapeHtml(p.providerName)}</span></td>
-                        <td>${renderLocation(p.hq)}</td>
-                        <td class="price" ${cls}>${pFmt}</td>
-                        <td class="price" ${cls}>${cFmt}</td>
-                        <td class="price" ${cls}>${tFmt}</td>
-                        <td>${uptime}</td>
-                        <td>${latency}</td>
-                    </tr>`;
-                }).join('');
-
-                const expandContent = providers.length > 0 ? `
-                    <tr class="benchmark-expand-row">
-                        <td colspan="11">
-                            <div class="benchmark-expand-content" id="bmx-${safeId}">
-                                <table style="width:100%;background:transparent;border:none;">
-                                    <thead><tr>
-                                        <th style="cursor:default;background:#1a1f2e">Provider</th>
-                                        <th style="cursor:default;background:#1a1f2e">Location</th>
-                                        <th style="cursor:default;background:#1a1f2e">Prompt /1M</th>
-                                        <th style="cursor:default;background:#1a1f2e">Completion /1M</th>
-                                        <th style="cursor:default;background:#1a1f2e">Total /1M</th>
-                                        <th style="cursor:default;background:#1a1f2e">Uptime</th>
-                                        <th style="cursor:default;background:#1a1f2e">Latency</th>
-                                    </tr></thead>
-                                    <tbody>${providerRows}</tbody>
-                                </table>
-                            </div>
-                        </td>
-                    </tr>` : '';
-
-                const clickable = providers.length > 0
-                    ? `onclick="toggleBenchmarkExpand('${safeId}')" style="cursor:pointer"`
-                    : '';
-                const chevron = providers.length > 0
-                    ? `<span id="bmchev-${safeId}" style="margin-right:6px;display:inline-block;transition:transform 0.2s;color:#667eea">&#9654;</span>`
-                    : '';
-
-                return `
-                    <tr class="bm-row" data-bm-id="${escapeHtml(bm.id)}" data-or="${orData ? '1' : '0'}" ${clickable}>
-                        <td class="rank-cell">${bm.rank}</td>
-                        <td>
-                            ${chevron}
-                            <span title="${escapeHtml(bm.id)}">${escapeHtml(bm.id)}</span>
-                        </td>
-                        <td class="score">
-                            <div class="avg-score-bar">
-                                <div class="avg-score-fill" style="width:${barW}px"></div>
-                                ${bm.avg}
-                            </div>
-                        </td>
-                        <td class="score">${bm.ifeval}</td>
-                        <td class="score">${bm.bbh}</td>
-                        <td class="score">${bm.math}</td>
-                        <td class="score">${bm.gpqa}</td>
-                        <td class="score">${bm.musr}</td>
-                        <td class="score">${bm.mmlu_pro}</td>
-                        <td style="text-align:center">${providerCount}</td>
-                        <td style="text-align:right">${cheapestFmt}</td>
-                    </tr>
-                    ${expandContent}
-                `;
-            }).join('');
-        }
-
-        function toggleBenchmarkExpand(safeId) {
-            const el = document.getElementById(`bmx-${safeId}`);
-            const chev = document.getElementById(`bmchev-${safeId}`);
-            if (!el) return;
-            const open = el.classList.toggle('open');
-            if (chev) chev.style.transform = open ? 'rotate(90deg)' : '';
-        }
-
-        function filterBenchmarks() {
-            const q = (document.getElementById('bm-search')?.value || '').toLowerCase();
-            const orOnly = document.getElementById('bm-or-only')?.checked ?? true;
-            let visible = 0;
-
-            document.querySelectorAll('#bm-tbody .bm-row').forEach(row => {
-                const id = row.dataset.bmId || '';
-                const isOr = row.dataset.or === '1';
-                const matchQ = !q || id.toLowerCase().includes(q);
-                const matchOr = !orOnly || isOr;
-                const show = matchQ && matchOr;
-                row.style.display = show ? '' : 'none';
-                // also hide/show the expand row that follows
-                const next = row.nextElementSibling;
-                if (next && next.classList.contains('benchmark-expand-row')) {
-                    next.style.display = show ? '' : 'none';
+                const r = await fetch('rollups/gpu/latest.json');
+                if (r.ok) {
+                    const d = await r.json();
+                    document.getElementById('stat-runpod').textContent =
+                        d.runpod?.total_gpus ?? '–';
+                    document.getElementById('stat-vast').textContent =
+                        d.vast?.total_gpu_types ?? '–';
                 }
-                if (show) visible++;
-            });
-
-            const el = document.getElementById('bm-count');
-            if (el) {
-                const orOnly = document.getElementById('bm-or-only')?.checked ?? true;
-                const suffix = orOnly
-                    ? `available on OpenRouter (${benchmarkData?.total || 0} total ranked)`
-                    : `ranked models shown`;
-                el.textContent = `${visible} ${suffix}`;
-            }
+            } catch (_) {}
         }
 
-        // Load data on page load
-        loadData();
+        loadStats();
     </script>
 </body>
 </html>
