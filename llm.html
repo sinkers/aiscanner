@@ -652,14 +652,13 @@
             cursor: help;
             position: relative;
             flex-shrink: 0;
+            z-index: 1;
         }
+        .bm-info-icon:hover { z-index: 9999; }
         .bm-info-icon:hover .bm-tooltip { display: block; }
         .bm-tooltip {
             display: none;
-            position: absolute;
-            bottom: calc(100% + 8px);
-            left: 50%;
-            transform: translateX(-50%);
+            position: fixed;
             width: 260px;
             background: #1a1f2e;
             border: 1px solid #667eea;
@@ -670,21 +669,22 @@
             color: #e0e0e0;
             line-height: 1.5;
             white-space: normal;
-            z-index: 200;
+            z-index: 9999;
             text-align: left;
             cursor: auto;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-        }
-        .bm-tooltip::after {
-            content: '';
-            position: absolute;
-            top: 100%;
-            left: 50%;
-            transform: translateX(-50%);
-            border: 6px solid transparent;
-            border-top-color: #667eea;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+            /* position set via JS on hover */
+            bottom: auto;
+            top: auto;
+            left: auto;
         }
         .bm-tooltip a { color: #667eea; text-decoration: underline; font-size: 0.9em; }
+
+        /* Allow tooltips to escape table overflow clipping */
+        .benchmark-table-container { overflow: visible; }
+        .benchmark-table { overflow: visible; }
+        .benchmark-table thead { position: relative; z-index: 10; }
+        .benchmark-table th { overflow: visible; }
 
         /* ── Benchmark Rankings ── */
         .benchmark-rank-badge {
@@ -707,9 +707,7 @@
             margin-bottom: 20px;
         }
 
-        .benchmark-table-container {
-            overflow-x: auto;
-        }
+        /* benchmark-table-container overflow set to visible above for tooltips */
 
         .benchmark-table th, .benchmark-table td {
             padding: 10px 12px;
@@ -2217,6 +2215,23 @@
                 el.textContent = `${visible} ${suffix}`;
             }
         }
+
+        // ── Benchmark tooltip positioning (fixed, escapes table overflow) ──────
+        document.addEventListener('mouseover', e => {
+            const icon = e.target.closest('.bm-info-icon');
+            if (!icon) return;
+            const tip = icon.querySelector('.bm-tooltip');
+            if (!tip) return;
+            const rect = icon.getBoundingClientRect();
+            const tipW = 260;
+            let left = rect.left + rect.width / 2 - tipW / 2;
+            // Keep within viewport
+            left = Math.max(8, Math.min(left, window.innerWidth - tipW - 8));
+            const top = rect.top - 8; // will appear above via transform
+            tip.style.left = left + 'px';
+            tip.style.top = (top) + 'px';
+            tip.style.transform = 'translateY(-100%)';
+        });
 
         // Load data on page load
         loadData();
