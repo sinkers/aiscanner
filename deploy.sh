@@ -32,7 +32,9 @@ pip install -r infra/requirements.txt -q
 # ------------------------------------------------------------------
 # Bootstrap CDK environment (safe to re-run)
 # ------------------------------------------------------------------
-echo "Bootstrapping CDK environment..."
+echo "Bootstrapping CDK environments..."
+# us-east-1 is required for the ACM certificate stack (CloudFront constraint)
+(cd infra && cdk bootstrap "aws://$AWS_ACCOUNT/us-east-1" --quiet)
 (cd infra && cdk bootstrap "aws://$AWS_ACCOUNT/$AWS_REGION" --quiet)
 
 # ------------------------------------------------------------------

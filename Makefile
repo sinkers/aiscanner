@@ -10,6 +10,7 @@ lambda_fn = $(shell python3 -c "import json; print(list(json.load(open('$(OUTPUT
 ## Full deploy: install deps, bootstrap CDK, deploy stack, seed S3
 deploy: install
 	@echo "=== Bootstrapping CDK ==="
+	cd infra && cdk bootstrap aws://$(shell aws sts get-caller-identity --query Account --output text)/us-east-1 --quiet
 	cd infra && cdk bootstrap --quiet
 	@echo "=== Deploying stack ==="
 	cd infra && cdk deploy --require-approval never --outputs-file ../$(OUTPUTS_FILE)
