@@ -2,10 +2,11 @@
 
 OUTPUTS_FILE := cdk-outputs.json
 
-# Read stack outputs (only valid after deploy)
-bucket    = $(shell python3 -c "import json; print(list(json.load(open('$(OUTPUTS_FILE)')).values())[0]['BucketName'])" 2>/dev/null)
-cf_url    = $(shell python3 -c "import json; print(list(json.load(open('$(OUTPUTS_FILE)')).values())[0]['CloudFrontURL'])" 2>/dev/null)
-lambda_fn = $(shell python3 -c "import json; print(list(json.load(open('$(OUTPUTS_FILE)')).values())[0]['LambdaName'])" 2>/dev/null)
+# Read stack outputs — search all stacks for the key (handles multi-stack outputs)
+_outputs  = $(shell python3 -c "import json; d=json.load(open('$(OUTPUTS_FILE)')); [print(s[k]) for s in d.values() for k in ['$(1)'] if k in s]" 2>/dev/null)
+bucket    = $(shell python3 -c "import json; d=json.load(open('$(OUTPUTS_FILE)')); [print(s['BucketName']) for s in d.values() if 'BucketName' in s]" 2>/dev/null)
+cf_url    = $(shell python3 -c "import json; d=json.load(open('$(OUTPUTS_FILE)')); [print(s['CloudFrontURL']) for s in d.values() if 'CloudFrontURL' in s]" 2>/dev/null)
+lambda_fn = $(shell python3 -c "import json; d=json.load(open('$(OUTPUTS_FILE)')); [print(s['LambdaName']) for s in d.values() if 'LambdaName' in s]" 2>/dev/null)
 
 ## Full deploy: install deps, bootstrap CDK, deploy stack, seed S3
 deploy: install
@@ -13,11 +14,11 @@ deploy: install
 	cd infra && cdk bootstrap aws://$(shell aws sts get-caller-identity --query Account --output text)/us-east-1 --quiet
 	cd infra && cdk bootstrap --quiet
 	@echo "=== Deploying stack ==="
-	cd infra && cdk deploy --require-approval never --outputs-file ../$(OUTPUTS_FILE)
+	cd infra && cdk deploy --all --require-approval never --outputs-file ../$(OUTPUTS_FILE)
 	@echo "=== Seeding S3 ==="
 	$(MAKE) seed
 	@echo ""
-	@echo "Site: $$(python3 -c "import json; print(list(json.load(open('$(OUTPUTS_FILE)')).values())[0]['CloudFrontURL'])")"
+	@echo "Site: $$(python3 -c "import json; d=json.load(open('$(OUTPUTS_FILE)')); [print(s['SiteURL']) for s in d.values() if 'SiteURL' in s]")"
 
 ## Install CDK Python dependencies
 install:
