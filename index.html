@@ -611,6 +611,92 @@
         }
 
         .cheapest-price { color: #4ade80; font-weight: 600; }
+
+        /* ── Benchmark Rankings ── */
+        .benchmark-rank-badge {
+            background: linear-gradient(135deg, #f59e0b, #ef4444);
+            color: white;
+            padding: 2px 10px;
+            border-radius: 20px;
+            font-size: 0.78em;
+            font-weight: 700;
+            white-space: nowrap;
+            flex-shrink: 0;
+            font-family: 'Courier New', monospace;
+        }
+
+        .benchmark-controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .benchmark-table-container {
+            overflow-x: auto;
+        }
+
+        .benchmark-table th, .benchmark-table td {
+            padding: 10px 12px;
+            font-size: 0.9em;
+        }
+
+        .benchmark-table td.score {
+            font-family: 'Courier New', monospace;
+            color: #a0c4ff;
+            text-align: right;
+        }
+
+        .benchmark-table td.rank-cell {
+            font-family: 'Courier New', monospace;
+            font-weight: 700;
+            color: #f59e0b;
+            text-align: center;
+        }
+
+        .benchmark-expand-row td {
+            padding: 0 !important;
+            border-top: none !important;
+        }
+
+        .benchmark-expand-content {
+            display: none;
+            background: #0f1419;
+            padding: 15px 20px;
+            border-top: 1px solid #2a2f3e;
+        }
+
+        .benchmark-expand-content.open { display: block; }
+
+        .toggle-switch {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            font-size: 0.9em;
+            color: #a0a0a0;
+        }
+
+        .toggle-switch input[type=checkbox] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+            accent-color: #667eea;
+        }
+
+        .avg-score-bar {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .avg-score-fill {
+            height: 6px;
+            border-radius: 3px;
+            background: linear-gradient(90deg, #667eea, #4ade80);
+            min-width: 2px;
+        }
     </style>
 </head>
 <body>
@@ -669,6 +755,7 @@
             <button class="tab" data-view="performance">Performance Leaders</button>
             <button class="tab" data-view="pricing">Pricing Comparison</button>
             <button class="tab" data-view="comparisons">Model Comparisons</button>
+            <button class="tab" data-view="benchmarks">Benchmark Rankings</button>
         </div>
 
         <div id="providers-view" class="view active">
@@ -694,6 +781,12 @@
         <div id="comparisons-view" class="view">
             <div id="comparisons-container"></div>
         </div>
+
+        <div id="benchmarks-view" class="view">
+            <div id="benchmarks-container">
+                <div style="text-align:center;color:#a0a0a0;padding:60px;font-size:0.9em;">Loading benchmark data...</div>
+            </div>
+        </div>
     </div>
 
     <div class="modal" id="provider-modal">
@@ -710,6 +803,9 @@
 
     <script>
         let infraData = null;
+        let benchmarkData = null;
+        let benchmarkMap = {};   // lowercase id -> benchmark entry
+        let _benchmarkLoaded = false;
         let currentSort = { column: 'models', direction: 'desc' };
         let filteredProviders = [];
         let columnFilters = {
@@ -1467,6 +1563,10 @@
             document.querySelectorAll('.view').forEach(v => {
                 v.classList.toggle('active', v.id === view + '-view');
             });
+            if (view === 'benchmarks' && !_benchmarkLoaded) {
+                _benchmarkLoaded = true;
+                loadAndRenderBenchmarks();
+            }
         }
 
         function sortTable(column) {
@@ -1633,6 +1733,11 @@
                 ? `<span class="comparison-spread">${spread}% spread</span>`
                 : '';
 
+            const bm = getBenchmark(modelData.modelId);
+            const rankBadge = bm
+                ? `<span class="benchmark-rank-badge" title="Open LLM Leaderboard rank · avg ${bm.avg}">🏆 #${bm.rank} · ${bm.avg}</span>`
+                : '';
+
             const rows = sorted.map(p => {
                 const isCheapest = p.totalPrice === minPrice;
                 const cls = isCheapest ? 'class="cheapest-price"' : '';
@@ -1663,6 +1768,7 @@
                          onclick="toggleModelComparison(this)">
                         <span class="comparison-chevron" id="chevron-${safeId}">&#9654;</span>
                         <span class="comparison-model-name" title="${escapeHtml(modelData.modelId)}">${escapeHtml(modelData.modelName || modelData.modelId)}</span>
+                        ${rankBadge}
                         <span class="comparison-cheapest">${cheapestFmt}${spreadHtml}</span>
                         <span class="comparison-provider-badge">${modelData.providers.length} providers</span>
                     </div>
@@ -1792,6 +1898,245 @@
             });
             const el = document.getElementById('comparison-count');
             if (el) el.textContent = `${visible} models available from 2+ providers`;
+        }
+
+        // ----------------------------------------------------------------
+        // Benchmark Rankings
+        // ----------------------------------------------------------------
+
+        async function loadAndRenderBenchmarks() {
+            const container = document.getElementById('benchmarks-container');
+            try {
+                const resp = await fetch('rollups/benchmarks.json');
+                if (!resp.ok) throw new Error('not found');
+                benchmarkData = await resp.json();
+
+                // Build lookup map
+                benchmarkData.models.forEach(m => {
+                    benchmarkMap[m.id.toLowerCase()] = m;
+                    const parts = m.id.split('/');
+                    if (parts.length > 1) {
+                        // index by name-only as fallback (do not overwrite if already set)
+                        const nameKey = parts[parts.length - 1].toLowerCase();
+                        if (!benchmarkMap[nameKey]) benchmarkMap[nameKey] = m;
+                    }
+                });
+
+                renderBenchmarkView(container);
+            } catch (e) {
+                container.innerHTML = '<div style="text-align:center;color:#a0a0a0;padding:60px;">Benchmark data not available yet — it will be populated after the first daily Lambda run.</div>';
+            }
+        }
+
+        function getBenchmark(modelId) {
+            const direct = benchmarkMap[modelId.toLowerCase()];
+            if (direct) return direct;
+            const namePart = modelId.includes('/')
+                ? modelId.split('/').pop().toLowerCase()
+                : modelId.toLowerCase();
+            return benchmarkMap[namePart] || null;
+        }
+
+        function renderBenchmarkView(container) {
+            // Build model -> providers map
+            const modelProviderMap = {};
+            Object.entries(infraData.providers).forEach(([providerName, providerData]) => {
+                providerData.models.forEach(model => {
+                    if (!modelProviderMap[model.model_id]) {
+                        modelProviderMap[model.model_id] = {
+                            modelId: model.model_id,
+                            modelName: model.model_name,
+                            providers: [],
+                        };
+                    }
+                    const totalPrice = model.pricing.prompt + model.pricing.completion;
+                    modelProviderMap[model.model_id].providers.push({
+                        providerName,
+                        promptPrice: model.pricing.prompt,
+                        completionPrice: model.pricing.completion,
+                        totalPrice,
+                        uptime24h: model.performance.uptime_24h,
+                        latencyP50: model.performance.latency_30m ? model.performance.latency_30m.p50 : null,
+                        hq: infraData.providers[providerName].provider_info.headquarters || null,
+                    });
+                });
+            });
+
+            // Match benchmark models to OpenRouter models
+            const ranked = benchmarkData.models
+                .map(bm => {
+                    const orData = modelProviderMap[bm.id.toLowerCase()] ||
+                        Object.values(modelProviderMap).find(m =>
+                            m.modelId.toLowerCase() === bm.id.toLowerCase() ||
+                            m.modelId.split('/').pop().toLowerCase() === bm.id.split('/').pop().toLowerCase()
+                        ) || null;
+                    return { bm, orData };
+                });
+
+            const onOpenRouter = ranked.filter(r => r.orData);
+            const allRows = ranked;
+
+            container.innerHTML = `
+                <div class="benchmark-controls">
+                    <input type="text" id="bm-search" placeholder="Filter models..."
+                           style="flex:1; max-width:400px;"
+                           oninput="filterBenchmarks()">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="bm-or-only" checked onchange="filterBenchmarks()">
+                        OpenRouter only
+                    </label>
+                    <span id="bm-count" style="color:#a0a0a0; font-size:0.9em; white-space:nowrap;">
+                        ${onOpenRouter.length} models ranked (${benchmarkData.total} total)
+                    </span>
+                </div>
+                <div class="benchmark-table-container">
+                    <table class="benchmark-table">
+                        <thead>
+                            <tr>
+                                <th style="cursor:default;text-align:center;width:60px">Rank</th>
+                                <th style="cursor:default">Model</th>
+                                <th style="cursor:default;text-align:right">Avg ⬆</th>
+                                <th style="cursor:default;text-align:right">IFEval</th>
+                                <th style="cursor:default;text-align:right">BBH</th>
+                                <th style="cursor:default;text-align:right">MATH</th>
+                                <th style="cursor:default;text-align:right">GPQA</th>
+                                <th style="cursor:default;text-align:right">MUSR</th>
+                                <th style="cursor:default;text-align:right">MMLU-Pro</th>
+                                <th style="cursor:default;text-align:center">Providers</th>
+                                <th style="cursor:default;text-align:right">Cheapest /1M</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bm-tbody">
+                            ${buildBenchmarkRows(allRows)}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            filterBenchmarks();
+        }
+
+        function buildBenchmarkRows(rows) {
+            return rows.map(({ bm, orData }) => {
+                const safeId = bm.id.replace(/[^a-zA-Z0-9]/g, '_');
+                const providers = orData ? orData.providers.sort((a, b) => a.totalPrice - b.totalPrice) : [];
+                const cheapest = providers[0];
+                const cheapestFmt = !cheapest ? '—'
+                    : cheapest.totalPrice === 0 ? '<span style="color:#4ade80">FREE</span>'
+                    : `<span style="color:#4ade80">$${(cheapest.totalPrice * 1e6).toFixed(4)}</span>`;
+                const providerCount = providers.length > 0
+                    ? `<span style="color:#667eea;font-weight:600">${providers.length}</span>`
+                    : '<span style="color:#555">—</span>';
+                const barW = Math.round(bm.avg);
+
+                const providerRows = providers.map(p => {
+                    const isCheapest = p.totalPrice === cheapest.totalPrice;
+                    const cls = isCheapest ? 'class="cheapest-price"' : '';
+                    const pFmt = p.promptPrice === 0 ? 'FREE' : `$${(p.promptPrice * 1e6).toFixed(4)}`;
+                    const cFmt = p.completionPrice === 0 ? 'FREE' : `$${(p.completionPrice * 1e6).toFixed(4)}`;
+                    const tFmt = p.totalPrice === 0 ? 'FREE' : `$${(p.totalPrice * 1e6).toFixed(4)}${isCheapest ? ' ✓' : ''}`;
+                    const uptime = p.uptime24h != null ? `${p.uptime24h.toFixed(1)}%` : 'N/A';
+                    const latency = p.latencyP50 != null ? `${Math.round(p.latencyP50)}ms` : 'N/A';
+                    return `<tr>
+                        <td><span class="provider-name" data-p="${escapeHtml(p.providerName)}" onclick="event.stopPropagation();showProviderDetails(this.dataset.p)">${escapeHtml(p.providerName)}</span></td>
+                        <td>${renderLocation(p.hq)}</td>
+                        <td class="price" ${cls}>${pFmt}</td>
+                        <td class="price" ${cls}>${cFmt}</td>
+                        <td class="price" ${cls}>${tFmt}</td>
+                        <td>${uptime}</td>
+                        <td>${latency}</td>
+                    </tr>`;
+                }).join('');
+
+                const expandContent = providers.length > 0 ? `
+                    <tr class="benchmark-expand-row">
+                        <td colspan="11">
+                            <div class="benchmark-expand-content" id="bmx-${safeId}">
+                                <table style="width:100%;background:transparent;border:none;">
+                                    <thead><tr>
+                                        <th style="cursor:default;background:#1a1f2e">Provider</th>
+                                        <th style="cursor:default;background:#1a1f2e">Location</th>
+                                        <th style="cursor:default;background:#1a1f2e">Prompt /1M</th>
+                                        <th style="cursor:default;background:#1a1f2e">Completion /1M</th>
+                                        <th style="cursor:default;background:#1a1f2e">Total /1M</th>
+                                        <th style="cursor:default;background:#1a1f2e">Uptime</th>
+                                        <th style="cursor:default;background:#1a1f2e">Latency</th>
+                                    </tr></thead>
+                                    <tbody>${providerRows}</tbody>
+                                </table>
+                            </div>
+                        </td>
+                    </tr>` : '';
+
+                const clickable = providers.length > 0
+                    ? `onclick="toggleBenchmarkExpand('${safeId}')" style="cursor:pointer"`
+                    : '';
+                const chevron = providers.length > 0
+                    ? `<span id="bmchev-${safeId}" style="margin-right:6px;display:inline-block;transition:transform 0.2s;color:#667eea">&#9654;</span>`
+                    : '';
+
+                return `
+                    <tr class="bm-row" data-bm-id="${escapeHtml(bm.id)}" data-or="${orData ? '1' : '0'}" ${clickable}>
+                        <td class="rank-cell">${bm.rank}</td>
+                        <td>
+                            ${chevron}
+                            <span title="${escapeHtml(bm.id)}">${escapeHtml(bm.id)}</span>
+                        </td>
+                        <td class="score">
+                            <div class="avg-score-bar">
+                                <div class="avg-score-fill" style="width:${barW}px"></div>
+                                ${bm.avg}
+                            </div>
+                        </td>
+                        <td class="score">${bm.ifeval}</td>
+                        <td class="score">${bm.bbh}</td>
+                        <td class="score">${bm.math}</td>
+                        <td class="score">${bm.gpqa}</td>
+                        <td class="score">${bm.musr}</td>
+                        <td class="score">${bm.mmlu_pro}</td>
+                        <td style="text-align:center">${providerCount}</td>
+                        <td style="text-align:right">${cheapestFmt}</td>
+                    </tr>
+                    ${expandContent}
+                `;
+            }).join('');
+        }
+
+        function toggleBenchmarkExpand(safeId) {
+            const el = document.getElementById(`bmx-${safeId}`);
+            const chev = document.getElementById(`bmchev-${safeId}`);
+            if (!el) return;
+            const open = el.classList.toggle('open');
+            if (chev) chev.style.transform = open ? 'rotate(90deg)' : '';
+        }
+
+        function filterBenchmarks() {
+            const q = (document.getElementById('bm-search')?.value || '').toLowerCase();
+            const orOnly = document.getElementById('bm-or-only')?.checked ?? true;
+            let visible = 0;
+
+            document.querySelectorAll('#bm-tbody .bm-row').forEach(row => {
+                const id = row.dataset.bmId || '';
+                const isOr = row.dataset.or === '1';
+                const matchQ = !q || id.toLowerCase().includes(q);
+                const matchOr = !orOnly || isOr;
+                const show = matchQ && matchOr;
+                row.style.display = show ? '' : 'none';
+                // also hide/show the expand row that follows
+                const next = row.nextElementSibling;
+                if (next && next.classList.contains('benchmark-expand-row')) {
+                    next.style.display = show ? '' : 'none';
+                }
+                if (show) visible++;
+            });
+
+            const el = document.getElementById('bm-count');
+            if (el) {
+                const orOnly = document.getElementById('bm-or-only')?.checked ?? true;
+                const suffix = orOnly
+                    ? `available on OpenRouter (${benchmarkData?.total || 0} total ranked)`
+                    : `ranked models shown`;
+                el.textContent = `${visible} ${suffix}`;
+            }
         }
 
         // Load data on page load

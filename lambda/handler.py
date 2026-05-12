@@ -6,6 +6,7 @@ Fetches endpoints for all models, writes:
   rollups/latest.json              current state (UI loads this)
   rollups/providers/{name}.json    per-provider price history
   rollups/models/{model_id}.json   per-model cross-provider history
+  rollups/benchmarks.json          Open LLM Leaderboard scores
 
 Environment variables (set by CDK):
   S3_BUCKET               target bucket
@@ -251,6 +252,81 @@ def update_rollups(infra_map, today):
 
 
 # ---------------------------------------------------------------------------
+# Open LLM Leaderboard benchmarks
+# ---------------------------------------------------------------------------
+
+HF_ROWS_URL = (
+    "https://datasets-server.huggingface.co/rows"
+    "?dataset=open-llm-leaderboard%2Fcontents"
+    "&config=default&split=train&length=100&offset={offset}"
+)
+
+# Exact column names as returned by the HuggingFace datasets-server API
+_COL_AVG     = "Average \u2b06\ufe0f"   # "Average ⬆️"
+_COL_PARAMS  = "#Params (B)"
+
+
+def fetch_benchmarks():
+    """
+    Fetch all rows from the Open LLM Leaderboard v2 dataset via the
+    HuggingFace datasets-server API (no auth required) and return a
+    processed, rank-ordered list of models.
+    """
+    models = []
+    offset = 0
+    total = None
+
+    while True:
+        data = http_get(HF_ROWS_URL.format(offset=offset))
+        if not data:
+            print(f"  benchmark fetch stopped at offset {offset}")
+            break
+
+        if total is None:
+            total = data.get("num_rows_total", 0)
+            print(f"  fetching {total} benchmark rows...")
+
+        rows = data.get("rows", [])
+        if not rows:
+            break
+
+        for item in rows:
+            r = item.get("row", {})
+            avg = r.get(_COL_AVG)
+            raw_id = r.get("Model", "").strip()
+            # Model field may be HTML — extract href path as canonical ID
+            m = re.search(r'href="https://huggingface\.co/([^"]+)"', raw_id)
+            hf_id = m.group(1) if m else re.sub(r"<[^>]+>", "", raw_id).strip()
+            if not hf_id or avg is None:
+                continue
+            models.append({
+                "id":       hf_id,
+                "avg":      round(float(avg), 2),
+                "ifeval":   round(float(r.get("IFEval")   or 0), 2),
+                "bbh":      round(float(r.get("BBH")      or 0), 2),
+                "math":     round(float(r.get("MATH Lvl 5") or 0), 2),
+                "gpqa":     round(float(r.get("GPQA")     or 0), 2),
+                "musr":     round(float(r.get("MUSR")     or 0), 2),
+                "mmlu_pro": round(float(r.get("MMLU-PRO") or 0), 2),
+            })
+
+        offset += len(rows)
+        if offset >= (total or 0):
+            break
+
+    # Sort highest score first and assign ranks
+    models.sort(key=lambda m: m["avg"], reverse=True)
+    for i, m in enumerate(models):
+        m["rank"] = i + 1
+
+    return {
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "total": len(models),
+        "models": models,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Lambda entry point
 # ---------------------------------------------------------------------------
 
@@ -302,6 +378,15 @@ def handler(event, context):
     print("Updated: rollups/latest.json")
 
     update_rollups(infra_map, today)
+
+    # Benchmark scores (Open LLM Leaderboard)
+    print("Fetching Open LLM Leaderboard benchmarks...")
+    benchmarks = fetch_benchmarks()
+    if benchmarks and benchmarks["total"] > 0:
+        s3_put_json("rollups/benchmarks.json", benchmarks, cache_seconds=86400)
+        print(f"Benchmarks saved: {benchmarks['total']} models ranked")
+    else:
+        print("Warning: benchmark fetch returned no data")
 
     print("Done.")
     return {"statusCode": 200, "date": today}
