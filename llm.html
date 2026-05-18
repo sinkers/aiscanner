@@ -92,7 +92,7 @@
 
         .control-row {
             display: grid;
-            grid-template-columns: 2fr 1fr 1fr 1fr;
+            grid-template-columns: 2fr 1.5fr 1fr 1fr 1fr;
             gap: 15px;
             margin-bottom: 15px;
         }
@@ -125,6 +125,42 @@
             outline: none;
             border-color: #667eea;
         }
+
+        select[multiple] {
+            min-height: 44px;
+            max-height: 120px;
+            overflow-y: auto;
+            padding: 8px;
+        }
+
+        select[multiple] option {
+            padding: 6px 8px;
+            margin: 2px 0;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        select[multiple] option:checked {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .model-type-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75em;
+            font-weight: 600;
+            margin: 2px;
+        }
+
+        .badge-text { background: #2a2f3e; color: #a0a0a0; }
+        .badge-stt { background: #667eea33; color: #667eea; }
+        .badge-tts { background: #764ba233; color: #b794f4; }
+        .badge-conversation { background: #48bb7833; color: #48bb78; }
+        .badge-video { background: #ed8936 33; color: #ed8936; }
+        .badge-image { background: #f6ad5533; color: #f6ad55; }
+        .badge-multimodal { background: #4299e133; color: #4299e1; }
 
         .tabs {
             display: flex;
@@ -809,7 +845,19 @@
                     <input type="text" id="search" placeholder="Search providers or models...">
                 </div>
                 <div class="control-group">
-                    <label for="location">Quick Location Filter</label>
+                    <label for="modelTypes">Model Types (Multi-Select)</label>
+                    <select id="modelTypes" multiple>
+                        <option value="text">Text Only</option>
+                        <option value="stt">STT (Speech-to-Text)</option>
+                        <option value="tts">TTS (Text-to-Speech)</option>
+                        <option value="conversation">Full Conversation (STT+TTS)</option>
+                        <option value="video">Video Input</option>
+                        <option value="image-gen">Image Generation</option>
+                        <option value="multimodal">Multimodal (2+ inputs)</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label for="location">Location</label>
                     <select id="location">
                         <option value="">All Locations</option>
                     </select>
@@ -823,7 +871,7 @@
                     <input type="number" id="minUptime" placeholder="0" min="0" max="100">
                 </div>
             </div>
-            <div class="filter-hint">💡 Tip: Use column filters below the table headers for precise filtering</div>
+            <div class="filter-hint">💡 Tip: Hold Ctrl/Cmd to select multiple model types. Use column filters below for precise filtering</div>
         </div>
 
         <div class="tabs">
@@ -883,6 +931,7 @@
         let benchmarkData = null;
         let benchmarkMap = {};   // lowercase id -> benchmark entry
         let _benchmarkLoaded = false;
+        let modelsArchitecture = {}; // model_id -> architecture data
         let currentSort = { column: 'models', direction: 'desc' };
         let filteredProviders = [];
         let columnFilters = {
@@ -902,6 +951,10 @@
                     const response = await fetch(src);
                     if (!response.ok) continue;
                     infraData = await response.json();
+
+                    // Load model architecture data
+                    await loadModelArchitectures();
+
                     initializeUI();
                     return;
                 } catch (_) {}
@@ -909,6 +962,85 @@
             console.error('Could not load data from any source');
             document.getElementById('providers-table-container').innerHTML =
                 '<div class="no-results">Error loading data. Make sure infrastructure_provider_map.json exists in the same directory.<br><br>If opening directly as a file, use index_standalone.html instead or run a web server.</div>';
+        }
+
+        async function loadModelArchitectures() {
+            try {
+                console.log('Fetching model architectures...');
+                const response = await fetch('openrouter_models.json');
+                if (!response.ok) {
+                    console.warn('Model architectures fetch failed:', response.status);
+                    return;
+                }
+                const data = await response.json();
+
+                // Check if data has the expected structure
+                if (!data || !data.data || !Array.isArray(data.data)) {
+                    console.error('Invalid model data structure:', data);
+                    return;
+                }
+
+                // Build architecture map
+                data.data.forEach(model => {
+                    modelsArchitecture[model.id] = model.architecture || {};
+                });
+
+                console.log(`✅ Loaded architecture data for ${Object.keys(modelsArchitecture).length} models`);
+
+                // Test categorization on sample models
+                const sampleModels = ['openai/gpt-audio-mini', 'google/gemini-2.0-flash-lite-001', 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free'];
+                sampleModels.forEach(modelId => {
+                    if (modelsArchitecture[modelId]) {
+                        const types = categorizeModel(modelId);
+                        console.log(`  ${modelId} → ${types.join(', ')}`);
+                    }
+                });
+            } catch (error) {
+                console.error('Error loading model architectures:', error);
+            }
+        }
+
+        function categorizeModel(modelId, architecture) {
+            if (!architecture) architecture = modelsArchitecture[modelId] || {};
+
+            const inputMods = architecture.input_modalities || [];
+            const outputMods = architecture.output_modalities || [];
+
+            const types = [];
+
+            // Check for audio capabilities
+            const hasAudioIn = inputMods.includes('audio');
+            const hasAudioOut = outputMods.includes('audio');
+
+            if (hasAudioIn && hasAudioOut) {
+                types.push('conversation');
+            } else if (hasAudioIn) {
+                types.push('stt');
+            } else if (hasAudioOut) {
+                types.push('tts');
+            }
+
+            // Check for video
+            if (inputMods.includes('video')) {
+                types.push('video');
+            }
+
+            // Check for image generation
+            if (outputMods.includes('image')) {
+                types.push('image-gen');
+            }
+
+            // Check if multimodal (2+ input types)
+            if (inputMods.length >= 2) {
+                types.push('multimodal');
+            }
+
+            // If no special types, it's text-only
+            if (types.length === 0 && inputMods.length === 1 && inputMods[0] === 'text' && outputMods.length === 1 && outputMods[0] === 'text') {
+                types.push('text');
+            }
+
+            return types;
         }
 
         function initializeUI() {
@@ -923,6 +1055,7 @@
             // Setup event listeners
             document.getElementById('search').addEventListener('input', applyFilters);
             document.getElementById('location').addEventListener('change', applyFilters);
+            document.getElementById('modelTypes').addEventListener('change', applyFilters);
             document.getElementById('minModels').addEventListener('input', applyFilters);
             document.getElementById('minUptime').addEventListener('input', applyFilters);
 
@@ -987,9 +1120,32 @@
             const minModels = parseInt(document.getElementById('minModels').value) || 0;
             const minUptime = parseFloat(document.getElementById('minUptime').value) || 0;
 
+            // Get selected model types
+            const modelTypesSelect = document.getElementById('modelTypes');
+            const selectedTypes = Array.from(modelTypesSelect.selectedOptions).map(opt => opt.value);
+
+            if (selectedTypes.length > 0) {
+                console.log(`🔍 Filtering by model types: ${selectedTypes.join(', ')}`);
+            }
+
             const providers = Object.entries(infraData.providers);
 
             filteredProviders = providers.filter(([name, data]) => {
+                // Model type filter
+                if (selectedTypes.length > 0) {
+                    const matchingModels = data.models.filter(model => {
+                        const modelTypes = categorizeModel(model.model_id);
+                        return selectedTypes.some(selectedType => modelTypes.includes(selectedType));
+                    });
+
+                    if (matchingModels.length === 0) return false;
+
+                    // Debug: Log first match
+                    if (matchingModels.length > 0 && providers.indexOf([name, data]) < 3) {
+                        console.log(`  ✓ ${name}: ${matchingModels.length} matching models`);
+                    }
+                }
+
                 // Global search filter
                 if (search) {
                     const matchesName = name.toLowerCase().includes(search);
@@ -1065,7 +1221,30 @@
             });
 
             updateFiltersSummary(search, location, minModels, minUptime);
-            renderProvidersTable();
+
+            // Re-render the currently active view
+            const activeTab = document.querySelector('.tab.active');
+            if (activeTab) {
+                const view = activeTab.dataset.view;
+                switch(view) {
+                    case 'providers':
+                        renderProvidersTable();
+                        break;
+                    case 'geography':
+                        renderGeographyView();
+                        break;
+                    case 'performance':
+                        renderPerformanceView();
+                        break;
+                    case 'pricing':
+                        renderPricingView();
+                        break;
+                    case 'comparisons':
+                        renderComparisonsView();
+                        break;
+                    // benchmarks view doesn't use filtered providers
+                }
+            }
         }
 
         function updateFiltersSummary(search, location, minModels, minUptime) {
@@ -1159,7 +1338,7 @@
                             <th class="sortable ${currentSort.column === 'latency' ? 'sort-' + currentSort.direction : ''}"
                                 onclick="sortTable('latency')">Latency</th>
                             <th class="sortable ${currentSort.column === 'price' ? 'sort-' + currentSort.direction : ''}"
-                                onclick="sortTable('price')">Price Range (per 1M)</th>
+                                onclick="sortTable('price')">Price Range (per 1M input)</th>
                             <th>Actions</th>
                         </tr>
                         <tr class="filter-row">
@@ -1252,7 +1431,10 @@
         function renderGeographyView() {
             const byLocation = {};
 
-            Object.entries(infraData.providers).forEach(([name, data]) => {
+            // Use filteredProviders if filters are active, otherwise all providers
+            const providersToShow = filteredProviders.length > 0 ? filteredProviders : Object.entries(infraData.providers);
+
+            providersToShow.forEach(([name, data]) => {
                 const loc = data.provider_info.headquarters || 'Unknown';
                 if (!byLocation[loc]) {
                     byLocation[loc] = [];
@@ -1300,7 +1482,8 @@
         }
 
         function renderPerformanceView() {
-            const providers = Object.entries(infraData.providers);
+            // Use filteredProviders if filters are active, otherwise all providers
+            const providers = filteredProviders.length > 0 ? filteredProviders : Object.entries(infraData.providers);
 
             // Best uptime
             const bestUptime = [...providers]
@@ -1372,9 +1555,12 @@
         }
 
         function renderPricingView() {
+            // Use filteredProviders if filters are active, otherwise all providers
+            const providers = filteredProviders.length > 0 ? filteredProviders : Object.entries(infraData.providers);
+
             // Collect all model offerings
             const offerings = [];
-            Object.entries(infraData.providers).forEach(([providerName, data]) => {
+            providers.forEach(([providerName, data]) => {
                 data.models.forEach(model => {
                     offerings.push({
                         provider: providerName,
@@ -1387,14 +1573,14 @@
                 });
             });
 
-            // Sort by total price
-            offerings.sort((a, b) => a.totalPrice - b.totalPrice);
+            // Sort by input (prompt) price — output ratio varies by workload so total is misleading
+            offerings.sort((a, b) => a.promptPrice - b.promptPrice);
 
-            // Free models
-            const freeModels = offerings.filter(o => o.totalPrice === 0).slice(0, 20);
+            // Free models (free = both input and output are free)
+            const freeModels = offerings.filter(o => o.promptPrice === 0 && o.completionPrice === 0).slice(0, 20);
 
-            // Cheapest paid models
-            const cheapestPaid = offerings.filter(o => o.totalPrice > 0).slice(0, 20);
+            // Cheapest paid models (any non-zero price)
+            const cheapestPaid = offerings.filter(o => o.promptPrice > 0 || o.completionPrice > 0).slice(0, 20);
 
             const html = `
                 <div style="margin-bottom: 40px;">
@@ -1426,9 +1612,8 @@
                             <tr>
                                 <th>Model</th>
                                 <th>Provider</th>
-                                <th>Prompt (per 1M)</th>
-                                <th>Completion (per 1M)</th>
-                                <th>Total (per 1M)</th>
+                                <th>Input (per 1M)</th>
+                                <th>Output (per 1M)</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1438,7 +1623,6 @@
                                     <td><span class="provider-name" onclick="showProviderDetails('${escapeHtml(o.provider)}')">${escapeHtml(o.provider)}</span></td>
                                     <td class="price">$${(o.promptPrice * 1000000).toFixed(4)}</td>
                                     <td class="price">$${(o.completionPrice * 1000000).toFixed(4)}</td>
-                                    <td class="price"><strong>$${(o.totalPrice * 1000000).toFixed(4)}</strong></td>
                                 </tr>
                             `).join('')}
                         </tbody>
@@ -1492,11 +1676,11 @@
 
                 <div class="info-grid">
                     <div class="info-item">
-                        <div class="info-label">Prompt Price Range (per 1M tokens)</div>
+                        <div class="info-label">Input Price Range (per 1M tokens)</div>
                         <div class="info-value price">$${(pr.min_prompt * 1000000).toFixed(4)} - $${(pr.max_prompt * 1000000).toFixed(4)}</div>
                     </div>
                     <div class="info-item">
-                        <div class="info-label">Completion Price Range (per 1M tokens)</div>
+                        <div class="info-label">Output Price Range (per 1M tokens)</div>
                         <div class="info-value price">$${(pr.min_completion * 1000000).toFixed(4)} - $${(pr.max_completion * 1000000).toFixed(4)}</div>
                     </div>
                 </div>
@@ -1516,7 +1700,7 @@
                 ` : ''}
 
                 <div style="margin: 20px 0; padding: 15px; background: #0f1419; border-radius: 8px; border: 1px solid #2a2f3e;">
-                    <div class="info-label" style="margin-bottom: 12px;">Avg Pricing History (per 1M tokens)</div>
+                    <div class="info-label" style="margin-bottom: 12px;">Avg Input/Output Price History (per 1M tokens)</div>
                     <div id="history-chart-container" style="position:relative; height:160px;">
                         <canvas id="history-chart"></canvas>
                     </div>
@@ -1530,7 +1714,7 @@
                                 <div class="model-header">
                                     <div class="model-id">${escapeHtml(model.model_id)}</div>
                                     <div class="model-pricing">
-                                        $${(model.pricing.prompt * 1000000).toFixed(4)} / $${(model.pricing.completion * 1000000).toFixed(4)} per 1M
+                                        In: $${(model.pricing.prompt * 1000000).toFixed(4)} / Out: $${(model.pricing.completion * 1000000).toFixed(4)} per 1M
                                     </div>
                                 </div>
                                 <div class="model-details">
@@ -1583,7 +1767,7 @@
                         labels: data.history.map(h => h.date),
                         datasets: [
                             {
-                                label: 'Avg Prompt',
+                                label: 'Avg Input',
                                 data: data.history.map(h => h.avg_prompt_price != null ? +(h.avg_prompt_price * 1e6).toFixed(6) : null),
                                 borderColor: '#667eea',
                                 backgroundColor: 'rgba(102,126,234,0.1)',
@@ -1592,7 +1776,7 @@
                                 pointRadius: 3,
                             },
                             {
-                                label: 'Avg Completion',
+                                label: 'Avg Output',
                                 data: data.history.map(h => h.avg_completion_price != null ? +(h.avg_completion_price * 1e6).toFixed(6) : null),
                                 borderColor: '#764ba2',
                                 backgroundColor: 'rgba(118,75,162,0.1)',
@@ -1640,9 +1824,30 @@
             document.querySelectorAll('.view').forEach(v => {
                 v.classList.toggle('active', v.id === view + '-view');
             });
-            if (view === 'benchmarks' && !_benchmarkLoaded) {
-                _benchmarkLoaded = true;
-                loadAndRenderBenchmarks();
+
+            // Re-render the view with current filters
+            switch(view) {
+                case 'providers':
+                    renderProvidersTable();
+                    break;
+                case 'geography':
+                    renderGeographyView();
+                    break;
+                case 'performance':
+                    renderPerformanceView();
+                    break;
+                case 'pricing':
+                    renderPricingView();
+                    break;
+                case 'comparisons':
+                    renderComparisonsView();
+                    break;
+                case 'benchmarks':
+                    if (!_benchmarkLoaded) {
+                        _benchmarkLoaded = true;
+                        loadAndRenderBenchmarks();
+                    }
+                    break;
             }
         }
 
@@ -1669,7 +1874,7 @@
                 case 'latency':
                     return provider.performance_stats.avg_latency_p50;
                 case 'price':
-                    return provider.pricing_range.min_prompt + provider.pricing_range.min_completion;
+                    return provider.pricing_range.min_prompt;  // Sort by input price only
                 default:
                     return 0;
             }
@@ -1708,16 +1913,16 @@
         }
 
         function renderPriceRange(pr) {
-            const min = (pr.min_prompt + pr.min_completion) * 1000000;
-            const max = (pr.max_prompt + pr.max_completion) * 1000000;
+            // Show input (prompt) range only — output ratio varies by workload
+            const min = pr.min_prompt * 1000000;
+            const max = pr.max_prompt * 1000000;
             if (min === 0 && max === 0) return 'FREE';
-            // Smart formatting based on magnitude
             if (max < 1) {
-                return `$${min.toFixed(4)} - $${max.toFixed(4)}`;
+                return `$${min.toFixed(4)} – $${max.toFixed(4)}`;
             } else if (max < 100) {
-                return `$${min.toFixed(2)} - $${max.toFixed(2)}`;
+                return `$${min.toFixed(2)} – $${max.toFixed(2)}`;
             } else {
-                return `$${min.toFixed(0)} - $${max.toFixed(0)}`;
+                return `$${min.toFixed(0)} – $${max.toFixed(0)}`;
             }
         }
 
@@ -1753,9 +1958,12 @@
         let _modelCharts = new Map();
 
         function renderComparisonsView() {
+            // Use filteredProviders if filters are active, otherwise all providers
+            const providers = filteredProviders.length > 0 ? filteredProviders : Object.entries(infraData.providers);
+
             // Build model -> providers map from the flat provider data
             const modelMap = {};
-            Object.entries(infraData.providers).forEach(([providerName, providerData]) => {
+            providers.forEach(([providerName, providerData]) => {
                 providerData.models.forEach(model => {
                     if (!modelMap[model.model_id]) {
                         modelMap[model.model_id] = {
@@ -1818,19 +2026,16 @@
             const rows = sorted.map(p => {
                 const isCheapest = p.totalPrice === minPrice;
                 const cls = isCheapest ? 'class="cheapest-price"' : '';
-                const promptFmt  = p.promptPrice  === 0 ? 'FREE' : `$${(p.promptPrice  * 1e6).toFixed(4)}`;
-                const completionFmt = p.completionPrice === 0 ? 'FREE' : `$${(p.completionPrice * 1e6).toFixed(4)}`;
-                const totalFmt   = p.totalPrice === 0 ? 'FREE'
-                    : `$${(p.totalPrice * 1e6).toFixed(4)}${isCheapest ? ' ✓' : ''}`;
+                const inputFmt  = p.promptPrice  === 0 ? 'FREE' : `$${(p.promptPrice  * 1e6).toFixed(4)}`;
+                const outputFmt = p.completionPrice === 0 ? 'FREE' : `$${(p.completionPrice * 1e6).toFixed(4)}`;
                 const uptime  = p.uptime24h  != null ? `${p.uptime24h.toFixed(1)}%`  : 'N/A';
                 const latency = p.latencyP50 != null ? `${Math.round(p.latencyP50)}ms` : 'N/A';
                 return [
                     `<tr>`,
                     `<td><span class="provider-name" data-p="${escapeHtml(p.providerName)}" onclick="showProviderDetails(this.dataset.p)">${escapeHtml(p.providerName)}</span></td>`,
                     `<td>${renderLocation(p.hq)}</td>`,
-                    `<td class="price" ${cls}>${promptFmt}</td>`,
-                    `<td class="price" ${cls}>${completionFmt}</td>`,
-                    `<td class="price" ${cls}>${totalFmt}</td>`,
+                    `<td class="price" ${cls}>${inputFmt}</td>`,
+                    `<td class="price" ${cls}>${outputFmt}</td>`,
                     `<td>${uptime}</td>`,
                     `<td>${latency}</td>`,
                     `</tr>`,
@@ -1855,9 +2060,8 @@
                                 <tr>
                                     <th style="cursor:default">Provider</th>
                                     <th style="cursor:default">Location</th>
-                                    <th style="cursor:default">Prompt /1M</th>
-                                    <th style="cursor:default">Completion /1M</th>
-                                    <th style="cursor:default">Total /1M</th>
+                                    <th style="cursor:default">Input /1M</th>
+                                    <th style="cursor:default">Output /1M</th>
                                     <th style="cursor:default">Uptime</th>
                                     <th style="cursor:default">Latency</th>
                                 </tr>
@@ -1865,7 +2069,7 @@
                             <tbody>${rows}</tbody>
                         </table>
                         <div class="comparison-history-section">
-                            <div class="info-label" style="margin-bottom:10px;">Price History — combined prompt + completion per 1M tokens</div>
+                            <div class="info-label" style="margin-bottom:10px;">Price History — input + output per 1M tokens</div>
                             <div id="history-content-${safeId}" style="position:relative; height:180px;">
                                 <div style="text-align:center; color:#a0a0a0; padding:40px; font-size:0.85em;">Expand to load history...</div>
                             </div>
@@ -2080,7 +2284,7 @@
                                 <th style="cursor:default;text-align:right"><span class="bm-th-wrap">MUSR<span class="bm-info-icon">i<span class="bm-tooltip"><strong>Multi-step Soft Reasoning</strong> — long-context narrative reasoning requiring chaining multiple inference steps across a story.<br><a href="https://arxiv.org/abs/2310.16049" target="_blank" rel="noopener">Paper ↗</a></span></span></span></th>
                                 <th style="cursor:default;text-align:right"><span class="bm-th-wrap">MMLU-Pro<span class="bm-info-icon">i<span class="bm-tooltip"><strong>MMLU Professional</strong> — expert-level questions across 14 academic domains (law, medicine, engineering, etc.). Harder than standard MMLU.<br><a href="https://arxiv.org/abs/2406.01574" target="_blank" rel="noopener">Paper ↗</a></span></span></span></th>
                                 <th style="cursor:default;text-align:center">Providers</th>
-                                <th style="cursor:default;text-align:right">Cheapest /1M</th>
+                                <th style="cursor:default;text-align:right">Input /1M</th>
                             </tr>
                         </thead>
                         <tbody id="bm-tbody">
@@ -2095,22 +2299,21 @@
         function buildBenchmarkRows(rows) {
             return rows.map(({ bm, orData }) => {
                 const safeId = bm.id.replace(/[^a-zA-Z0-9]/g, '_');
-                const providers = orData ? orData.providers.sort((a, b) => a.totalPrice - b.totalPrice) : [];
+                const providers = orData ? orData.providers.sort((a, b) => a.promptPrice - b.promptPrice) : [];
                 const cheapest = providers[0];
                 const cheapestFmt = !cheapest ? '—'
-                    : cheapest.totalPrice === 0 ? '<span style="color:#4ade80">FREE</span>'
-                    : `<span style="color:#4ade80">$${(cheapest.totalPrice * 1e6).toFixed(4)}</span>`;
+                    : cheapest.promptPrice === 0 ? '<span style="color:#4ade80">FREE</span>'
+                    : `<span style="color:#4ade80">$${(cheapest.promptPrice * 1e6).toFixed(4)}</span>`;
                 const providerCount = providers.length > 0
                     ? `<span style="color:#667eea;font-weight:600">${providers.length}</span>`
                     : '<span style="color:#555">—</span>';
                 const barW = Math.round(bm.avg);
 
                 const providerRows = providers.map(p => {
-                    const isCheapest = p.totalPrice === cheapest.totalPrice;
+                    const isCheapest = p.promptPrice === cheapest.promptPrice;
                     const cls = isCheapest ? 'class="cheapest-price"' : '';
                     const pFmt = p.promptPrice === 0 ? 'FREE' : `$${(p.promptPrice * 1e6).toFixed(4)}`;
                     const cFmt = p.completionPrice === 0 ? 'FREE' : `$${(p.completionPrice * 1e6).toFixed(4)}`;
-                    const tFmt = p.totalPrice === 0 ? 'FREE' : `$${(p.totalPrice * 1e6).toFixed(4)}${isCheapest ? ' ✓' : ''}`;
                     const uptime = p.uptime24h != null ? `${p.uptime24h.toFixed(1)}%` : 'N/A';
                     const latency = p.latencyP50 != null ? `${Math.round(p.latencyP50)}ms` : 'N/A';
                     return `<tr>
@@ -2118,7 +2321,6 @@
                         <td>${renderLocation(p.hq)}</td>
                         <td class="price" ${cls}>${pFmt}</td>
                         <td class="price" ${cls}>${cFmt}</td>
-                        <td class="price" ${cls}>${tFmt}</td>
                         <td>${uptime}</td>
                         <td>${latency}</td>
                     </tr>`;
@@ -2132,9 +2334,8 @@
                                     <thead><tr>
                                         <th style="cursor:default;background:#1a1f2e">Provider</th>
                                         <th style="cursor:default;background:#1a1f2e">Location</th>
-                                        <th style="cursor:default;background:#1a1f2e">Prompt /1M</th>
-                                        <th style="cursor:default;background:#1a1f2e">Completion /1M</th>
-                                        <th style="cursor:default;background:#1a1f2e">Total /1M</th>
+                                        <th style="cursor:default;background:#1a1f2e">Input /1M</th>
+                                        <th style="cursor:default;background:#1a1f2e">Output /1M</th>
                                         <th style="cursor:default;background:#1a1f2e">Uptime</th>
                                         <th style="cursor:default;background:#1a1f2e">Latency</th>
                                     </tr></thead>
