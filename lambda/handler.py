@@ -840,19 +840,35 @@ def handler(event, context):
     # GPU rental pricing (RunPod + Vast.ai)
     print("Fetching GPU rental pricing...")
     runpod_gpus = fetch_runpod_gpus()
-    vast_gpus = fetch_vastai_gpus()
+    vast_gpus   = fetch_vastai_gpus()
+
     if runpod_gpus or vast_gpus:
         gpu_snapshot = {
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "runpod": {"total_gpus": len(runpod_gpus), "gpus": runpod_gpus},
             "vast":   {"total_gpu_types": len(vast_gpus), "gpus": vast_gpus},
         }
+
+        # If a provider returned nothing because its API key is not configured,
+        # carry forward the last known data so we don't wipe historical entries
+        # from the live dashboard while the key is absent.
+        if not runpod_gpus or not vast_gpus:
+            prev = s3_get_json("rollups/gpu/latest.json") or {}
+            if not runpod_gpus and prev.get("runpod", {}).get("gpus"):
+                gpu_snapshot["runpod"] = prev["runpod"]
+                print(f"  RunPod key not set — keeping {len(prev['runpod']['gpus'])} existing GPU entries")
+            if not vast_gpus and prev.get("vast", {}).get("gpus"):
+                gpu_snapshot["vast"] = prev["vast"]
+                print(f"  Vast.ai returned nothing — keeping {len(prev['vast']['gpus'])} existing GPU entries")
+
         s3_put_json(f"snapshots/gpu/{today}.json", gpu_snapshot, cache_seconds=86400)
         s3_put_json("rollups/gpu/latest.json", gpu_snapshot, cache_seconds=3600)
         update_gpu_rollups(gpu_snapshot, today)
-        print(f"GPU pricing saved: {len(runpod_gpus)} RunPod + {len(vast_gpus)} Vast.ai")
+        rp_count   = len(gpu_snapshot["runpod"]["gpus"])
+        vast_count = len(gpu_snapshot["vast"]["gpus"])
+        print(f"GPU pricing saved: {rp_count} RunPod + {vast_count} Vast.ai GPU types")
     else:
-        print("GPU API keys not configured — skipping GPU pricing collection")
+        print("No GPU data available — configure RUNPOD_API_KEY / VAST_API_KEY via SSM or env")
 
     # Daily report with advanced features (TTS, STT, video, image gen)
     print("Generating daily report with advanced features...")

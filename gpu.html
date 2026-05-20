@@ -492,7 +492,7 @@
                     provider: key,
                     providerLabel,
                     name: g.name,
-                    vram: g.vram_gb || g.vram || 0,
+                    vram: Math.round(g.vram_gb || g.vram || 0) || 0,
                     pricing,
                     tiers,
                     avgPrice:  getAvgPrice(pricing),
