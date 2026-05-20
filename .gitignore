@@ -1,3 +1,7 @@
+# Environment / secrets — never commit
+.env
+.env.*
+
 # Generated/temporary files
 mapping_progress.json
 index_standalone_backup.html

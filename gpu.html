@@ -345,30 +345,29 @@
 
     // Map each raw API field to its tier and a human label
     const FIELD_DEFS = [
-        // ── RunPod ─────────────────────────────────────────────────────────
-        // spot / interruptible
-        { field: 'community_spot',      tier: 'spot',     label: 'Community Spot (RunPod)'      },
-        { field: 'secure_spot',         tier: 'spot',     label: 'Secure Spot (RunPod)'         },
-        { field: 'minimum_bid',         tier: 'spot',     label: 'Minimum Bid (RunPod)'         },
-        // on-demand / stable
-        { field: 'community_on_demand', tier: 'demand',   label: 'Community On-Demand (RunPod)' },
-        { field: 'secure_on_demand',    tier: 'demand',   label: 'Secure On-Demand (RunPod)'    },
-        // reserved / always-on
-        { field: 'uninterruptable',     tier: 'reserved', label: 'Uninterruptable (RunPod)'     },
+        // ── RunPod — uses provider-specific field names ─────────────────────
+        { field: 'community_spot',      tier: 'spot',     label: 'Community Spot'      },
+        { field: 'secure_spot',         tier: 'spot',     label: 'Secure Spot'         },
+        { field: 'minimum_bid',         tier: 'spot',     label: 'Minimum Bid'         },
+        { field: 'community_on_demand', tier: 'demand',   label: 'Community On-Demand' },
+        { field: 'secure_on_demand',    tier: 'demand',   label: 'Secure On-Demand'    },
+        { field: 'uninterruptable',     tier: 'reserved', label: 'Uninterruptable'     },
 
-        // ── Vast.ai ────────────────────────────────────────────────────────
-        // spot / bid-based (is_bid=true — can be outbid and evicted)
-        { field: 'spot_min',            tier: 'spot',     label: 'Spot Min (Vast)'              },
-        { field: 'spot_avg',            tier: 'spot',     label: 'Spot Avg (Vast)'              },
-        { field: 'rentable_min',        tier: 'spot',     label: 'Rentable Min (Vast)'          },
-        // on-demand / stable (is_bid=false)
-        { field: 'demand_min',          tier: 'demand',   label: 'On-Demand Min (Vast)'         },
-        { field: 'demand_avg',          tier: 'demand',   label: 'On-Demand Avg (Vast)'         },
-        { field: 'rentable_avg',        tier: 'demand',   label: 'Rentable Avg (Vast)'          },
-        // overall market range (both bid and non-bid)
-        { field: 'min',                 tier: 'spot',     label: 'Market Min (Vast)'            },
-        { field: 'avg',                 tier: 'demand',   label: 'Market Avg (Vast)'            },
-        { field: 'max',                 tier: 'reserved', label: 'Market Max (Vast)'            },
+        // ── Shared field names (Vast.ai, Lambda Labs, TensorDock, Vultr, Azure) ──
+        // spot / interruptible
+        { field: 'spot_min',            tier: 'spot',     label: 'Spot Min'            },
+        { field: 'spot_avg',            tier: 'spot',     label: 'Spot Avg'            },
+        { field: 'rentable_min',        tier: 'spot',     label: 'Rentable Min'        },
+        // on-demand / stable
+        { field: 'demand_min',          tier: 'demand',   label: 'On-Demand Min'       },
+        { field: 'demand_avg',          tier: 'demand',   label: 'On-Demand Avg'       },
+        { field: 'rentable_avg',        tier: 'demand',   label: 'Rentable Avg'        },
+        // overall market range
+        { field: 'min',                 tier: 'spot',     label: 'Market Min'          },
+        { field: 'avg',                 tier: 'demand',   label: 'Market Avg'          },
+        { field: 'max',                 tier: 'reserved', label: 'Market Max'          },
+        // Lambda Labs full-instance price (shown in breakdown, not tier summary)
+        { field: 'instance_price',      tier: 'demand',   label: 'Instance Price'      },
     ];
 
     // Returns array of { field, label, price, tier } for all non-null prices
@@ -854,8 +853,14 @@
         const safeName = gpuName.replace(/[^a-zA-Z0-9]/g, '_');
         const chartEl  = () => document.getElementById(`chart-${safeId}`);
 
+        // RunPod/Vast history lives at the root; new providers have a sub-folder
+        const LEGACY_PROVIDERS = new Set(['runpod', 'vast']);
+        const histPath = LEGACY_PROVIDERS.has(provider)
+            ? `rollups/gpu/history/${safeName}.json`
+            : `rollups/gpu/history/${provider}/${safeName}.json`;
+
         try {
-            const r = await fetch(`rollups/gpu/history/${safeName}.json`);
+            const r = await fetch(histPath);
             if (!r.ok) throw new Error('not found');
             const data = await r.json();
 
@@ -875,16 +880,24 @@
                 community_on_demand:  'On-Demand (Community)',
                 secure_on_demand:     'On-Demand (Secure)',
                 uninterruptable:      'Reserved',
-                // Vast.ai — new split fields
-                vast_spot_min:        'Spot Min (Vast)',
-                vast_spot_avg:        'Spot Avg (Vast)',
-                vast_demand_min:      'On-Demand Min (Vast)',
-                vast_demand_avg:      'On-Demand Avg (Vast)',
-                vast_rentable_min:    'Rentable Min (Vast)',
-                // Vast.ai — legacy overall market fields
-                vast_min:             'Market Min (Vast)',
-                vast_max:             'Market Max (Vast)',
-                vast_avg:             'Market Avg (Vast)',
+                // Vast.ai
+                vast_spot_min:        'Spot Min',
+                vast_spot_avg:        'Spot Avg',
+                vast_demand_min:      'On-Demand Min',
+                vast_demand_avg:      'On-Demand Avg',
+                vast_rentable_min:    'Rentable Min',
+                vast_min:             'Market Min',
+                vast_max:             'Market Max',
+                vast_avg:             'Market Avg',
+                // Lambda Labs, TensorDock, Vultr, Azure — shared field names
+                demand_min:           'On-Demand Min',
+                demand_avg:           'On-Demand Avg',
+                spot_min:             'Spot Min',
+                spot_avg:             'Spot Avg',
+                min:                  'Market Min',
+                avg:                  'Market Avg',
+                max:                  'Market Max',
+                instance_price:       'Instance Price',
             };
 
             const numericKeys = data.history.length > 0

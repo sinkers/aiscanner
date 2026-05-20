@@ -149,10 +149,11 @@ class PricingStack(Stack):
                 "S3_BUCKET": bucket.bucket_name,
                 "OPENROUTER_API_TOKEN": "REDACTED_OPENROUTER_TOKEN_2",
                 # GPU API keys are read from SSM Parameter Store at runtime.
-                # Set them once with:  make configure-gpu
+                # Set them once with:  make configure-gpu  (or load from .env)
                 # Env vars here are a fallback for local testing only.
-                "RUNPOD_API_KEY": os.environ.get("RUNPOD_API_KEY", ""),
-                "VAST_API_KEY": os.environ.get("VAST_API_KEY", ""),
+                "RUNPOD_API_KEY":     os.environ.get("RUNPOD_API_KEY", ""),
+                "VAST_API_KEY":       os.environ.get("VAST_API_KEY", ""),
+                "LAMBDA_LABS_API_KEY": os.environ.get("LAMBDA_LABS_API_KEY", ""),
             },
         )
 

@@ -14,8 +14,14 @@ Writes to S3:
 Environment variables (set by CDK):
   S3_BUCKET               target bucket
   OPENROUTER_API_TOKEN    bearer token for /endpoints API
-  RUNPOD_API_KEY          RunPod GraphQL API key (optional)
-  VAST_API_KEY            Vast.ai REST API key (optional)
+
+GPU API keys (optional — set via SSM /dame/gpu/* or env var fallback):
+  RUNPOD_API_KEY          RunPod GraphQL API key
+  VAST_API_KEY            Vast.ai REST API key
+  LAMBDA_LABS_API_KEY     Lambda Labs REST API key
+
+No-auth providers (always collected):
+  TensorDock, Vultr, Azure
 
 ==============================================================================
 HISTORICAL DATA PROTECTION — DO NOT REMOVE OR MODIFY THESE INVARIANTS
@@ -45,6 +51,7 @@ file, use `aws s3api list-object-versions` to find and restore a prior version.
 ==============================================================================
 """
 
+import base64
 import json
 import os
 import re
@@ -76,28 +83,37 @@ def _load_gpu_keys():
     """
     GPU API keys are optional. Resolution order:
       1. Environment variable (set at deploy time, fine for dev)
-      2. SSM Parameter Store  (set once post-deploy, no redeploy needed)
+      2. SSM Parameter Store  (set once post-deploy with make configure-gpu)
     """
-    runpod = os.environ.get("RUNPOD_API_KEY", "")
-    vast   = os.environ.get("VAST_API_KEY", "")
-    if not runpod:
-        runpod = _ssm_get("/dame/gpu/runpod_api_key")
-    if not vast:
-        vast = _ssm_get("/dame/gpu/vast_api_key")
-    return runpod, vast
+    _key_map = {
+        "runpod":       ("RUNPOD_API_KEY",       "/dame/gpu/runpod_api_key"),
+        "vast":         ("VAST_API_KEY",          "/dame/gpu/vast_api_key"),
+        "lambda_labs":  ("LAMBDA_LABS_API_KEY",   "/dame/gpu/lambda_labs_api_key"),
+    }
+    result = {}
+    for provider, (env_var, ssm_path) in _key_map.items():
+        result[provider] = os.environ.get(env_var, "") or _ssm_get(ssm_path)
+    return result
 
 
-RUNPOD_API_KEY, VAST_API_KEY = _load_gpu_keys()
+_GPU_KEYS = _load_gpu_keys()
+RUNPOD_API_KEY      = _GPU_KEYS["runpod"]
+VAST_API_KEY        = _GPU_KEYS["vast"]
+LAMBDA_LABS_API_KEY = _GPU_KEYS["lambda_labs"]
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def http_get(url, token=None):
+def http_get(url, token=None, basic_auth=None):
     headers = {"User-Agent": "dame-pricing-collector/1.0"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
+    elif basic_auth:
+        # basic_auth is the API key — username is empty (Lambda Labs style)
+        creds = base64.b64encode(f"{basic_auth}:".encode()).decode()
+        headers["Authorization"] = f"Basic {creds}"
     req = urllib.request.Request(url, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
@@ -575,9 +591,337 @@ def fetch_vastai_gpus():
     return results
 
 
+# ---------------------------------------------------------------------------
+# GPU pricing collection — Lambda Labs
+# ---------------------------------------------------------------------------
+
+LAMBDA_LABS_API_URL = "https://cloud.lambdalabs.com/api/v1"
+
+
+def fetch_lambdalabs_gpus():
+    """Fetch instance types and pricing from Lambda Labs REST API."""
+    if not LAMBDA_LABS_API_KEY:
+        return []
+    data = http_get(f"{LAMBDA_LABS_API_URL}/instance-types", basic_auth=LAMBDA_LABS_API_KEY)
+    if not data:
+        return []
+
+    results = []
+    for instance_name, info in data.get("data", {}).items():
+        itype = info.get("instance_type", {})
+        if itype.get("gpu_description", "") in ("N/A", "", None):
+            continue  # skip CPU-only instances
+        specs = itype.get("specs", {})
+        price_cents = itype.get("price_cents_per_hour", 0)
+        gpu_count = specs.get("gpus", 1) or 1
+        price_per_gpu = price_cents / 100 / gpu_count  # $/hr per GPU
+
+        # Extract GPU name and VRAM from gpu_description
+        # e.g. "1x H100 SXM5 (80 GB)" → name "H100 SXM5", vram 80
+        gpu_desc = itype.get("gpu_description", "")
+        vram = 0
+        m = re.search(r"\((\d+)\s*GB", gpu_desc)
+        if m:
+            vram = int(m.group(1))
+        # Strip leading count prefix "Nx " if present
+        gpu_name_clean = re.sub(r"^\d+x\s+", "", gpu_desc).split("(")[0].strip()
+        display_name = gpu_name_clean or instance_name
+
+        regions = [r["name"] for r in info.get("regions_with_capacity_available", [])]
+
+        results.append({
+            "name":         display_name,
+            "instance_id":  instance_name,
+            "vram_gb":      vram,
+            "gpu_count":    gpu_count,
+            "regions":      regions,
+            "in_stock":     len(regions) > 0,
+            "pricing": {
+                # Lambda Labs is on-demand only (no spot)
+                "min":        price_per_gpu,
+                "avg":        price_per_gpu,
+                "demand_min": price_per_gpu,
+                "demand_avg": price_per_gpu,
+                "instance_price": price_cents / 100,  # full instance $/hr
+            },
+        })
+
+    results.sort(key=lambda x: x["name"])
+    print(f"  Lambda Labs: {len(results)} instance types")
+    return results
+
+
+# ---------------------------------------------------------------------------
+# GPU pricing collection — TensorDock
+# ---------------------------------------------------------------------------
+
+TENSORDOCK_HOSTNODES_URL = "https://marketplace.tensordock.com/api/v0/client/deploy/hostnodes"
+
+
+def fetch_tensordock_gpus():
+    """Fetch available GPU host nodes from TensorDock marketplace (no auth)."""
+    data = http_get(TENSORDOCK_HOSTNODES_URL)
+    if not data:
+        return []
+
+    hostnodes = data.get("hostnodes", {})
+    gpu_groups = {}
+
+    for node_id, node in hostnodes.items():
+        specs = node.get("specs", {})
+        gpu_specs = specs.get("gpu", {})
+        for gpu_slug, gpu_info in gpu_specs.items():
+            if not isinstance(gpu_info, dict):
+                continue
+            price = gpu_info.get("price")
+            if price is None:
+                continue
+            vram = gpu_info.get("vram", 0)
+            # Normalise slug to readable name: "geforcertx4090-pcie-24gb" → "GeForce RTX 4090"
+            clean = gpu_slug.upper()
+            # Trim trailing vram/pcie/nvlink suffixes that duplicate info
+            clean = re.sub(r"-?\d+GB$", "", clean, flags=re.IGNORECASE)
+            clean = re.sub(r"-(PCIE|NVLINK|SXM\d*)$", "", clean, flags=re.IGNORECASE)
+            clean = clean.replace("-", " ").strip()
+
+            if clean not in gpu_groups:
+                gpu_groups[clean] = {"vram_gb": vram, "prices": []}
+            gpu_groups[clean]["prices"].append(float(price))
+
+    results = []
+    for name, gdata in gpu_groups.items():
+        prices = gdata["prices"]
+        if not prices:
+            continue
+        avg_price = sum(prices) / len(prices)
+        results.append({
+            "name":        name,
+            "vram_gb":     gdata["vram_gb"],
+            "total_offers": len(prices),
+            "pricing": {
+                # TensorDock is on-demand only
+                "min":        min(prices),
+                "avg":        avg_price,
+                "max":        max(prices),
+                "demand_min": min(prices),
+                "demand_avg": avg_price,
+            },
+        })
+
+    results.sort(key=lambda x: x["name"])
+    print(f"  TensorDock: {len(results)} GPU types from {len(hostnodes)} nodes")
+    return results
+
+
+# ---------------------------------------------------------------------------
+# GPU pricing collection — Vultr
+# ---------------------------------------------------------------------------
+
+VULTR_PLANS_URL = "https://api.vultr.com/v2/plans?type=vcg&per_page=500"
+
+
+def fetch_vultr_gpus():
+    """Fetch GPU instance plans from Vultr public API (no auth)."""
+    all_plans = []
+    url = VULTR_PLANS_URL
+    page = 0
+    while url and page < 10:
+        data = http_get(url)
+        if not data:
+            break
+        all_plans.extend(data.get("plans", []))
+        next_link = (data.get("meta") or {}).get("links", {}).get("next", "")
+        url = next_link or None
+        page += 1
+
+    if not all_plans:
+        return []
+
+    # Group by GPU model
+    gpu_groups = {}
+    for plan in all_plans:
+        gpu_type = plan.get("gpu_type", "Unknown")
+        # "NVIDIA_A16" → "A16", "AMD_MI300X" → "AMD MI300X"
+        clean = gpu_type.replace("NVIDIA_", "").replace("AMD_", "AMD ").replace("_", " ")
+        vram_per_gpu = plan.get("gpu_vram_gb", 0)
+        gpu_count = plan.get("gpu_count", 1) or 1
+        total_vram = vram_per_gpu * gpu_count
+        hourly = plan.get("hourly_cost", 0) or 0
+        price_per_gpu = hourly / gpu_count if gpu_count else hourly
+
+        if clean not in gpu_groups:
+            gpu_groups[clean] = {"vram_gb": total_vram, "prices_per_gpu": []}
+        gpu_groups[clean]["prices_per_gpu"].append(price_per_gpu)
+
+    results = []
+    for name, gdata in gpu_groups.items():
+        prices = gdata["prices_per_gpu"]
+        if not prices:
+            continue
+        avg_price = sum(prices) / len(prices)
+        results.append({
+            "name":        f"{name}",
+            "vram_gb":     gdata["vram_gb"],
+            "total_offers": len(prices),
+            "pricing": {
+                # Vultr plans are on-demand only
+                "min":        min(prices),
+                "avg":        avg_price,
+                "max":        max(prices),
+                "demand_min": min(prices),
+                "demand_avg": avg_price,
+            },
+        })
+
+    results.sort(key=lambda x: x["name"])
+    print(f"  Vultr: {len(results)} GPU types from {len(all_plans)} plans")
+    return results
+
+
+# ---------------------------------------------------------------------------
+# GPU pricing collection — Azure
+# ---------------------------------------------------------------------------
+
+AZURE_PRICING_URL = "https://prices.azure.com/api/retail/prices"
+
+# Filter: GPU VM families (NC, ND, NV, NG) in eastus, on-demand Linux prices
+_AZURE_FILTER = (
+    "armRegionName eq 'eastus' and "
+    "(startswith(armSkuName,'Standard_NC') or "
+    "startswith(armSkuName,'Standard_ND') or "
+    "startswith(armSkuName,'Standard_NV') or "
+    "startswith(armSkuName,'Standard_NG')) and "
+    "priceType eq 'Consumption'"
+)
+
+
+def _azure_gpu_name(sku_name):
+    """Best-effort extraction of GPU model from an Azure VM SKU name."""
+    patterns = [
+        (r"H200",   "H200"),
+        (r"H100",   "H100"),
+        (r"A100",   "A100"),
+        (r"A10\b",  "A10"),
+        (r"T4\b",   "T4"),
+        (r"V100",   "V100"),
+        (r"K80",    "K80"),
+        (r"M60",    "M60"),
+        (r"V620",   "AMD Radeon V620"),
+        (r"RTX4000","RTX 4000"),
+    ]
+    for pat, name in patterns:
+        if re.search(pat, sku_name, re.IGNORECASE):
+            return name
+    # Fall back to series letter (NC → NC-series, ND → ND-series)
+    m = re.match(r"Standard_(N[CDVG])", sku_name)
+    return f"{m.group(1)}-series" if m else sku_name
+
+
+def fetch_azure_gpus():
+    """Fetch Azure GPU VM on-demand + spot prices for eastus (no auth)."""
+    items = []
+    url = f"{AZURE_PRICING_URL}?$filter={urllib.request.quote(_AZURE_FILTER)}"
+    page = 0
+    while url and page < 25:
+        data = http_get(url)
+        if not data:
+            break
+        batch = data.get("Items", [])
+        items.extend(batch)
+        url = data.get("NextPageLink")
+        page += 1
+
+    if not items:
+        print("  Azure: no pricing items returned")
+        return []
+
+    gpu_groups = {}
+    for item in items:
+        sku   = item.get("armSkuName", "")
+        price = item.get("retailPrice", 0)
+        meter = item.get("meterName", "")
+        if not price or not sku:
+            continue
+        # Skip Windows, Reserved, Low Priority
+        if any(t in meter for t in ("Windows", "Low Priority", "Spot Priority")):
+            continue
+
+        gpu_name = _azure_gpu_name(sku)
+        is_spot  = "Spot" in meter
+
+        if gpu_name not in gpu_groups:
+            gpu_groups[gpu_name] = {"spot": [], "demand": []}
+        if is_spot:
+            gpu_groups[gpu_name]["spot"].append(price)
+        else:
+            gpu_groups[gpu_name]["demand"].append(price)
+
+    results = []
+    for gpu_name, gdata in gpu_groups.items():
+        spot_p   = gdata["spot"]
+        demand_p = gdata["demand"]
+        all_p    = spot_p + demand_p
+        if not all_p:
+            continue
+
+        pricing = {
+            "min": min(all_p),
+            "max": max(all_p),
+            "avg": sum(all_p) / len(all_p),
+        }
+        if spot_p:
+            pricing["spot_min"] = min(spot_p)
+            pricing["spot_avg"] = sum(spot_p) / len(spot_p)
+        if demand_p:
+            pricing["demand_min"] = min(demand_p)
+            pricing["demand_avg"] = sum(demand_p) / len(demand_p)
+
+        results.append({
+            "name":         gpu_name,
+            "vram_gb":      0,   # Azure pricing API doesn't expose VRAM specs
+            "total_offers": len(all_p),
+            "spot_offers":  len(spot_p),
+            "demand_offers": len(demand_p),
+            "pricing":      pricing,
+        })
+
+    results.sort(key=lambda x: x["name"])
+    print(f"  Azure: {len(results)} GPU types from {len(items)} pricing records")
+    return results
+
+
+def _write_provider_rollup(provider_key, gpu_list, today, prefix_fields):
+    """
+    Generic helper: update per-GPU history files for a provider.
+
+    provider_key   - snake_case provider name (e.g. "lambda_labs")
+    gpu_list       - list of GPU dicts from the fetcher
+    today          - ISO date string
+    prefix_fields  - dict mapping storage field name → pricing dict key
+                     e.g. {"ll_min": "min", "ll_demand_min": "demand_min"}
+    """
+    for gpu in gpu_list:
+        name = gpu.get("name", "")
+        if not name:
+            continue
+        s3_key = f"rollups/gpu/history/{provider_key}/{safe_key(name)}.json"
+        rollup = s3_get_json(s3_key) or {"gpu_name": name, "provider": provider_key, "history": []}
+        rollup["history"] = [h for h in rollup["history"] if h["date"] != today]
+        p = gpu.get("pricing", {})
+        entry = {"date": today}
+        for field, pricing_key in prefix_fields.items():
+            val = p.get(pricing_key)
+            if val is not None:
+                entry[field] = val
+        rollup["history"].append(entry)
+        rollup["history"].sort(key=lambda x: x["date"])
+        s3_put_json(s3_key, rollup, cache_seconds=86400)
+
+
 def update_gpu_rollups(gpu_snapshot, today):
-    """Append today's prices to per-GPU history files."""
-    # RunPod GPU history
+    """Append today's prices to per-GPU history files for all providers."""
+
+    # RunPod — legacy path (no provider prefix) kept for backward compat
     for gpu in gpu_snapshot.get("runpod", {}).get("gpus", []):
         name = gpu.get("name", "")
         if not name:
@@ -597,18 +941,16 @@ def update_gpu_rollups(gpu_snapshot, today):
         rollup["history"].sort(key=lambda x: x["date"])
         s3_put_json(key, rollup, cache_seconds=86400)
 
-    # Vast.ai GPU history
+    # Vast.ai — merged into RunPod history files (adds vast_* fields)
     for gpu in gpu_snapshot.get("vast", {}).get("gpus", []):
         name = gpu.get("name", "")
         if not name:
             continue
         key = f"rollups/gpu/history/{safe_key(name)}.json"
         rollup = s3_get_json(key) or {"gpu_name": name, "history": []}
-        # Merge: keep existing runpod entry for today if present, add vast entry
         existing_today = [h for h in rollup["history"] if h["date"] == today]
         rollup["history"] = [h for h in rollup["history"] if h["date"] != today]
         p = gpu.get("pricing", {})
-        # If there was already a runpod entry today, merge both into a combined record
         combined = existing_today[0] if existing_today else {"date": today}
         combined.update({field: val for field, val in {
             "vast_min":             p.get("min"),
@@ -625,9 +967,52 @@ def update_gpu_rollups(gpu_snapshot, today):
         rollup["history"].sort(key=lambda x: x["date"])
         s3_put_json(key, rollup, cache_seconds=86400)
 
-    runpod_count = len(gpu_snapshot.get("runpod", {}).get("gpus", []))
-    vast_count = len(gpu_snapshot.get("vast", {}).get("gpus", []))
-    print(f"GPU rollups updated: {runpod_count} RunPod + {vast_count} Vast.ai GPU types")
+    # Lambda Labs — on-demand only, per-GPU pricing
+    _write_provider_rollup("lambda_labs", gpu_snapshot.get("lambda_labs", {}).get("gpus", []), today, {
+        "demand_min": "demand_min",
+        "demand_avg": "demand_avg",
+        "instance_price": "instance_price",
+    })
+
+    # TensorDock — on-demand only
+    _write_provider_rollup("tensordock", gpu_snapshot.get("tensordock", {}).get("gpus", []), today, {
+        "demand_min": "demand_min",
+        "demand_avg": "demand_avg",
+        "min":        "min",
+        "avg":        "avg",
+        "max":        "max",
+    })
+
+    # Vultr — on-demand only
+    _write_provider_rollup("vultr", gpu_snapshot.get("vultr", {}).get("gpus", []), today, {
+        "demand_min": "demand_min",
+        "demand_avg": "demand_avg",
+        "min":        "min",
+        "avg":        "avg",
+        "max":        "max",
+    })
+
+    # Azure — spot + on-demand
+    _write_provider_rollup("azure", gpu_snapshot.get("azure", {}).get("gpus", []), today, {
+        "min":        "min",
+        "avg":        "avg",
+        "max":        "max",
+        "spot_min":   "spot_min",
+        "spot_avg":   "spot_avg",
+        "demand_min": "demand_min",
+        "demand_avg": "demand_avg",
+    })
+
+    rp_count  = len(gpu_snapshot.get("runpod",      {}).get("gpus", []))
+    va_count  = len(gpu_snapshot.get("vast",         {}).get("gpus", []))
+    ll_count  = len(gpu_snapshot.get("lambda_labs",  {}).get("gpus", []))
+    td_count  = len(gpu_snapshot.get("tensordock",   {}).get("gpus", []))
+    vu_count  = len(gpu_snapshot.get("vultr",        {}).get("gpus", []))
+    az_count  = len(gpu_snapshot.get("azure",        {}).get("gpus", []))
+    print(
+        f"GPU rollups updated: RunPod={rp_count} Vast={va_count} "
+        f"LambdaLabs={ll_count} TensorDock={td_count} Vultr={vu_count} Azure={az_count}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -837,38 +1222,57 @@ def handler(event, context):
     else:
         print("Warning: benchmark fetch returned no data")
 
-    # GPU rental pricing (RunPod + Vast.ai)
+    # GPU rental pricing (all providers)
     print("Fetching GPU rental pricing...")
-    runpod_gpus = fetch_runpod_gpus()
-    vast_gpus   = fetch_vastai_gpus()
+    runpod_gpus      = fetch_runpod_gpus()
+    vast_gpus        = fetch_vastai_gpus()
+    lambdalabs_gpus  = fetch_lambdalabs_gpus()
+    tensordock_gpus  = fetch_tensordock_gpus()
+    vultr_gpus       = fetch_vultr_gpus()
+    azure_gpus       = fetch_azure_gpus()
 
-    if runpod_gpus or vast_gpus:
+    # Build snapshot — always write if at least one provider has data
+    _provider_results = {
+        "runpod":       runpod_gpus,
+        "vast":         vast_gpus,
+        "lambda_labs":  lambdalabs_gpus,
+        "tensordock":   tensordock_gpus,
+        "vultr":        vultr_gpus,
+        "azure":        azure_gpus,
+    }
+    any_data = any(gpus for gpus in _provider_results.values())
+
+    if any_data:
         gpu_snapshot = {
             "generated_at": datetime.now(timezone.utc).isoformat(),
-            "runpod": {"total_gpus": len(runpod_gpus), "gpus": runpod_gpus},
-            "vast":   {"total_gpu_types": len(vast_gpus), "gpus": vast_gpus},
+            "runpod":      {"name": "RunPod",       "total_gpus":      len(runpod_gpus),      "gpus": runpod_gpus},
+            "vast":        {"name": "Vast.ai",      "total_gpu_types": len(vast_gpus),        "gpus": vast_gpus},
+            "lambda_labs": {"name": "Lambda Labs",  "total_gpus":      len(lambdalabs_gpus),  "gpus": lambdalabs_gpus},
+            "tensordock":  {"name": "TensorDock",   "total_gpus":      len(tensordock_gpus),  "gpus": tensordock_gpus},
+            "vultr":       {"name": "Vultr",        "total_gpus":      len(vultr_gpus),       "gpus": vultr_gpus},
+            "azure":       {"name": "Azure",        "total_gpu_types": len(azure_gpus),       "gpus": azure_gpus},
         }
 
-        # If a provider returned nothing because its API key is not configured,
-        # carry forward the last known data so we don't wipe historical entries
-        # from the live dashboard while the key is absent.
-        if not runpod_gpus or not vast_gpus:
-            prev = s3_get_json("rollups/gpu/latest.json") or {}
-            if not runpod_gpus and prev.get("runpod", {}).get("gpus"):
-                gpu_snapshot["runpod"] = prev["runpod"]
-                print(f"  RunPod key not set — keeping {len(prev['runpod']['gpus'])} existing GPU entries")
-            if not vast_gpus and prev.get("vast", {}).get("gpus"):
-                gpu_snapshot["vast"] = prev["vast"]
-                print(f"  Vast.ai returned nothing — keeping {len(prev['vast']['gpus'])} existing GPU entries")
+        # Carry forward last known data for any provider that returned nothing
+        # (key absent, API down, etc.) so the dashboard never goes blank.
+        prev = None
+        for provider_key, gpus in _provider_results.items():
+            if not gpus:
+                if prev is None:
+                    prev = s3_get_json("rollups/gpu/latest.json") or {}
+                prev_provider = prev.get(provider_key, {})
+                if prev_provider.get("gpus"):
+                    gpu_snapshot[provider_key] = prev_provider
+                    print(f"  {provider_key}: no new data — carrying forward "
+                          f"{len(prev_provider['gpus'])} existing entries")
 
         s3_put_json(f"snapshots/gpu/{today}.json", gpu_snapshot, cache_seconds=86400)
         s3_put_json("rollups/gpu/latest.json", gpu_snapshot, cache_seconds=3600)
         update_gpu_rollups(gpu_snapshot, today)
-        rp_count   = len(gpu_snapshot["runpod"]["gpus"])
-        vast_count = len(gpu_snapshot["vast"]["gpus"])
-        print(f"GPU pricing saved: {rp_count} RunPod + {vast_count} Vast.ai GPU types")
+        counts = {k: len(v["gpus"]) for k, v in gpu_snapshot.items() if isinstance(v, dict) and "gpus" in v}
+        print(f"GPU pricing saved: {counts}")
     else:
-        print("No GPU data available — configure RUNPOD_API_KEY / VAST_API_KEY via SSM or env")
+        print("No GPU data available — check API keys in SSM (/dame/gpu/*)")
 
     # Daily report with advanced features (TTS, STT, video, image gen)
     print("Generating daily report with advanced features...")

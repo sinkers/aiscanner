@@ -1,4 +1,4 @@
-.PHONY: deploy install synth diff destroy seed invoke serve configure-gpu
+.PHONY: deploy install synth diff destroy seed invoke serve configure-gpu configure-gpu-env
 
 OUTPUTS_FILE := cdk-outputs.json
 
@@ -51,10 +51,10 @@ invoke:
 	@echo "  aws logs tail /aws/lambda/$(lambda_fn) --follow"
 
 ## Store GPU rental API keys in SSM Parameter Store (run once after deploy)
-## Usage: RUNPOD_API_KEY=sk-... VAST_API_KEY=... make configure-gpu
+## Usage: RUNPOD_API_KEY=sk-... VAST_API_KEY=... LAMBDA_LABS_API_KEY=... make configure-gpu
 configure-gpu:
-	@if [ -z "$(RUNPOD_API_KEY)" ] && [ -z "$(VAST_API_KEY)" ]; then \
-		echo "Usage: RUNPOD_API_KEY=<key> VAST_API_KEY=<key> make configure-gpu"; \
+	@if [ -z "$(RUNPOD_API_KEY)" ] && [ -z "$(VAST_API_KEY)" ] && [ -z "$(LAMBDA_LABS_API_KEY)" ]; then \
+		echo "Usage: RUNPOD_API_KEY=<key> VAST_API_KEY=<key> LAMBDA_LABS_API_KEY=<key> make configure-gpu"; \
 		echo "At least one key must be provided."; \
 		exit 1; \
 	fi
@@ -76,7 +76,25 @@ configure-gpu:
 			--tier Standard; \
 		echo "  stored: /dame/gpu/vast_api_key"; \
 	fi
+	@if [ -n "$(LAMBDA_LABS_API_KEY)" ]; then \
+		aws ssm put-parameter \
+			--name "/dame/gpu/lambda_labs_api_key" \
+			--value "$(LAMBDA_LABS_API_KEY)" \
+			--type SecureString \
+			--overwrite \
+			--tier Standard; \
+		echo "  stored: /dame/gpu/lambda_labs_api_key"; \
+	fi
 	@echo "Keys stored. Invoke Lambda to collect GPU pricing: make invoke"
+
+## Load all GPU API keys from .env into SSM (convenience wrapper)
+configure-gpu-env:
+	@if [ ! -f .env ]; then echo ".env file not found"; exit 1; fi
+	@export $$(grep -v '^#' .env | xargs) && \
+		$(MAKE) configure-gpu \
+			RUNPOD_API_KEY="$$RUNPOD_API_KEY" \
+			VAST_API_KEY="$$VAST_API_KEY" \
+			LAMBDA_LABS_API_KEY="$$LAMBDA_LABS_API_KEY"
 
 ## Run local dev server
 serve:
