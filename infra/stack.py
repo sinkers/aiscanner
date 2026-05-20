@@ -7,6 +7,7 @@ from aws_cdk import (
     aws_s3 as s3,
     aws_cloudfront as cloudfront,
     aws_cloudfront_origins as origins,
+    aws_iam as iam,
     aws_lambda as lambda_,
     aws_events as events,
     aws_events_targets as targets,
@@ -58,12 +59,18 @@ class PricingStack(Stack):
         # ------------------------------------------------------------------
         # S3 bucket — private, served exclusively through CloudFront
         # ------------------------------------------------------------------
+        # IMPORTANT: versioning is enabled to protect historical pricing data.
+        # Historical snapshots (snapshots/YYYY-MM-DD.json) and per-provider/model
+        # rollup histories are the source of truth for all trend data — they must
+        # NEVER be overwritten or deleted. Versioning provides a safety net against
+        # accidental overwrites from Lambda bugs or bad deploys.
         bucket = s3.Bucket(
             self,
             "PricingBucket",
             bucket_name=f"dame-openrouter-pricing-{self.account}",
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
             removal_policy=RemovalPolicy.RETAIN,
+            versioned=True,
             cors=[
                 s3.CorsRule(
                     allowed_methods=[s3.HttpMethods.GET, s3.HttpMethods.HEAD],
@@ -141,13 +148,26 @@ class PricingStack(Stack):
             environment={
                 "S3_BUCKET": bucket.bucket_name,
                 "OPENROUTER_API_TOKEN": "REDACTED_OPENROUTER_TOKEN_2",
-                # GPU rental pricing — set these to enable RunPod/Vast.ai collection
+                # GPU API keys are read from SSM Parameter Store at runtime.
+                # Set them once with:  make configure-gpu
+                # Env vars here are a fallback for local testing only.
                 "RUNPOD_API_KEY": os.environ.get("RUNPOD_API_KEY", ""),
                 "VAST_API_KEY": os.environ.get("VAST_API_KEY", ""),
             },
         )
 
         bucket.grant_read_write(collector)
+
+        # Allow Lambda to read GPU API keys from SSM Parameter Store.
+        # Keys live at /dame/gpu/runpod_api_key and /dame/gpu/vast_api_key.
+        collector.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=["ssm:GetParameter"],
+                resources=[
+                    f"arn:aws:ssm:{self.region}:{self.account}:parameter/dame/gpu/*"
+                ],
+            )
+        )
 
         # ------------------------------------------------------------------
         # EventBridge rule — daily at 00:00 UTC

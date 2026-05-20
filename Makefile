@@ -1,4 +1,4 @@
-.PHONY: deploy install synth diff destroy seed invoke serve
+.PHONY: deploy install synth diff destroy seed invoke serve configure-gpu
 
 OUTPUTS_FILE := cdk-outputs.json
 
@@ -8,15 +8,16 @@ bucket    = $(shell python3 -c "import json; d=json.load(open('$(OUTPUTS_FILE)')
 cf_url    = $(shell python3 -c "import json; d=json.load(open('$(OUTPUTS_FILE)')); [print(s['CloudFrontURL']) for s in d.values() if 'CloudFrontURL' in s]" 2>/dev/null)
 lambda_fn = $(shell python3 -c "import json; d=json.load(open('$(OUTPUTS_FILE)')); [print(s['LambdaName']) for s in d.values() if 'LambdaName' in s]" 2>/dev/null)
 
-## Full deploy: install deps, bootstrap CDK, deploy stack, seed S3
+## Full deploy: install deps, bootstrap CDK, deploy stack, upload UI
+## Use 'make seed' on first-ever deploy to also initialise rollup data.
 deploy: install
 	@echo "=== Bootstrapping CDK ==="
 	cd infra && cdk bootstrap aws://$(shell aws sts get-caller-identity --query Account --output text)/us-east-1 --quiet
 	cd infra && cdk bootstrap --quiet
 	@echo "=== Deploying stack ==="
 	cd infra && cdk deploy --all --require-approval never --outputs-file ../$(OUTPUTS_FILE)
-	@echo "=== Seeding S3 ==="
-	$(MAKE) seed
+	@echo "=== Uploading UI ==="
+	$(MAKE) ui
 	@echo ""
 	@echo "Site: $$(python3 -c "import json; d=json.load(open('$(OUTPUTS_FILE)')); [print(s['SiteURL']) for s in d.values() if 'SiteURL' in s]")"
 
@@ -32,7 +33,11 @@ synth:
 diff:
 	cd infra && cdk diff
 
-## Upload index.html and current data to S3 (re-seed without full redeploy)
+## Upload HTML files to S3 without touching historical data
+ui:
+	python3 scripts/bootstrap_s3.py "$(bucket)" --upload-ui --ui-only
+
+## Seed S3 with data on first deploy (skips rollups that already exist)
 seed:
 	python3 scripts/bootstrap_s3.py "$(bucket)" --upload-ui
 
@@ -47,6 +52,34 @@ invoke:
 	| base64 -d
 	@echo "--- response ---"
 	@cat /tmp/pricing-invoke-out.json
+
+## Store GPU rental API keys in SSM Parameter Store (run once after deploy)
+## Usage: RUNPOD_API_KEY=sk-... VAST_API_KEY=... make configure-gpu
+configure-gpu:
+	@if [ -z "$(RUNPOD_API_KEY)" ] && [ -z "$(VAST_API_KEY)" ]; then \
+		echo "Usage: RUNPOD_API_KEY=<key> VAST_API_KEY=<key> make configure-gpu"; \
+		echo "At least one key must be provided."; \
+		exit 1; \
+	fi
+	@if [ -n "$(RUNPOD_API_KEY)" ]; then \
+		aws ssm put-parameter \
+			--name "/dame/gpu/runpod_api_key" \
+			--value "$(RUNPOD_API_KEY)" \
+			--type SecureString \
+			--overwrite \
+			--tier Standard; \
+		echo "  stored: /dame/gpu/runpod_api_key"; \
+	fi
+	@if [ -n "$(VAST_API_KEY)" ]; then \
+		aws ssm put-parameter \
+			--name "/dame/gpu/vast_api_key" \
+			--value "$(VAST_API_KEY)" \
+			--type SecureString \
+			--overwrite \
+			--tier Standard; \
+		echo "  stored: /dame/gpu/vast_api_key"; \
+	fi
+	@echo "Keys stored. Invoke Lambda to collect GPU pricing: make invoke"
 
 ## Run local dev server
 serve:

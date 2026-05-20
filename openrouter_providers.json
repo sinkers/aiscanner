@@ -110,15 +110,6 @@
       ]
     },
     {
-      "name": "Perceptron",
-      "slug": "perceptron",
-      "privacy_policy_url": "https://www.perceptron.inc/privacy-policy",
-      "terms_of_service_url": "https://www.perceptron.inc/terms-of-use",
-      "status_page_url": null,
-      "headquarters": "US",
-      "datacenters": []
-    },
-    {
       "name": "Black Forest Labs",
       "slug": "black-forest-labs",
       "privacy_policy_url": "https://bfl.ai/legal/privacy-policy",
@@ -341,6 +332,15 @@
       "datacenters": null
     },
     {
+      "name": "Novita",
+      "slug": "novita",
+      "privacy_policy_url": "https://novita.ai/legal/privacy-policy",
+      "terms_of_service_url": "https://novita.ai/legal/terms-of-service",
+      "status_page_url": "https://status.novita.ai/",
+      "headquarters": "US",
+      "datacenters": null
+    },
+    {
       "name": "Sourceful",
       "slug": "sourceful",
       "privacy_policy_url": "https://www.sourceful.com/legal/privacy-policy",
@@ -388,6 +388,15 @@
       "status_page_url": "https://status.deepinfra.com/",
       "headquarters": "US",
       "datacenters": null
+    },
+    {
+      "name": "Perceptron",
+      "slug": "perceptron",
+      "privacy_policy_url": "https://www.perceptron.inc/privacy-policy",
+      "terms_of_service_url": "https://www.perceptron.inc/terms-of-use",
+      "status_page_url": null,
+      "headquarters": "US",
+      "datacenters": []
     },
     {
       "name": "Xiaomi",
@@ -463,15 +472,6 @@
       "datacenters": null
     },
     {
-      "name": "Recraft",
-      "slug": "recraft",
-      "privacy_policy_url": null,
-      "terms_of_service_url": null,
-      "status_page_url": null,
-      "headquarters": null,
-      "datacenters": []
-    },
-    {
       "name": "Mistral",
       "slug": "mistral",
       "privacy_policy_url": "https://mistral.ai/terms/#privacy-policy",
@@ -488,6 +488,24 @@
       "status_page_url": "https://www.cloudflarestatus.com/",
       "headquarters": "US",
       "datacenters": null
+    },
+    {
+      "name": "Recraft",
+      "slug": "recraft",
+      "privacy_policy_url": null,
+      "terms_of_service_url": null,
+      "status_page_url": null,
+      "headquarters": null,
+      "datacenters": []
+    },
+    {
+      "name": "Crucible",
+      "slug": "crucible",
+      "privacy_policy_url": null,
+      "terms_of_service_url": null,
+      "status_page_url": null,
+      "headquarters": null,
+      "datacenters": []
     },
     {
       "name": "Nebius",
@@ -656,15 +674,6 @@
       "privacy_policy_url": "https://www.atlascloud.ai/privacy",
       "terms_of_service_url": null,
       "status_page_url": null,
-      "headquarters": "US",
-      "datacenters": null
-    },
-    {
-      "name": "Novita",
-      "slug": "novita",
-      "privacy_policy_url": "https://novita.ai/legal/privacy-policy",
-      "terms_of_service_url": "https://novita.ai/legal/terms-of-service",
-      "status_page_url": "https://status.novita.ai/",
       "headquarters": "US",
       "datacenters": null
     },

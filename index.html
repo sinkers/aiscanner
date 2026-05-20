@@ -86,6 +86,7 @@
 
         .section-card.llm { --accent: linear-gradient(90deg, #667eea, #764ba2); }
         .section-card.gpu { --accent: linear-gradient(90deg, #06b6d4, #4ade80); }
+        .section-card.voice { --accent: linear-gradient(90deg, #f59e0b, #ef4444); }
 
         .section-icon {
             font-size: 2.5em;
@@ -128,6 +129,12 @@
             color: #67d7ea;
         }
 
+        .section-card.voice .feature-tag {
+            background: rgba(245,158,11,0.12);
+            border-color: rgba(245,158,11,0.25);
+            color: #fbbf24;
+        }
+
         .section-cta {
             display: flex;
             align-items: center;
@@ -139,6 +146,7 @@
         }
 
         .section-card.gpu .section-cta { color: #06b6d4; }
+        .section-card.voice .section-cta { color: #f59e0b; }
 
         .section-cta-arrow {
             font-size: 1.1em;
@@ -230,6 +238,10 @@
                 <div class="stat-value gpu-stat" id="stat-vast">–</div>
                 <div class="stat-label">Vast.ai GPU Types</div>
             </div>
+            <div class="stat-item">
+                <div class="stat-value" id="stat-voice" style="background: linear-gradient(135deg, #f59e0b, #ef4444); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">–</div>
+                <div class="stat-label">Voice/Video Models</div>
+            </div>
         </div>
 
         <div class="sections">
@@ -267,6 +279,25 @@
                 </div>
                 <div class="section-cta">
                     Compare GPU prices
+                    <span class="section-cta-arrow">→</span>
+                </div>
+            </a>
+
+            <a href="voice.html" class="section-card voice">
+                <div class="section-icon">🎙️</div>
+                <div class="section-title">Voice &amp; Video AI</div>
+                <div class="section-description">
+                    Comprehensive tracker for STT, TTS, Image Generation and Video Generation services — pricing, streaming support, connection types, and capabilities across 30+ providers and 1,400+ models.
+                </div>
+                <div class="section-features">
+                    <span class="feature-tag">STT / TTS</span>
+                    <span class="feature-tag">Image Gen</span>
+                    <span class="feature-tag">Video Gen</span>
+                    <span class="feature-tag">Streaming</span>
+                    <span class="feature-tag">Open Source</span>
+                </div>
+                <div class="section-cta">
+                    Explore voice &amp; video
                     <span class="section-cta-arrow">→</span>
                 </div>
             </a>
@@ -316,6 +347,16 @@
                         d.runpod?.total_gpus ?? '–';
                     document.getElementById('stat-vast').textContent =
                         d.vast?.total_gpu_types ?? '–';
+                }
+            } catch (_) {}
+
+            // Load voice/video stats
+            try {
+                const r = await fetch('data/voice_video_models.json');
+                if (r.ok) {
+                    const d = await r.json();
+                    document.getElementById('stat-voice').textContent =
+                        (d.metadata?.total_models || 0).toLocaleString();
                 }
             } catch (_) {}
         }

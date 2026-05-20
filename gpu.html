@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPU Rental Pricing — RunPod vs Vast.ai</title>
+    <title>GPU Rental Pricing</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -145,19 +145,19 @@
         .badge {
             display: inline-block; padding: 2px 10px; border-radius: 20px;
             font-size: 0.78em; font-weight: 600; white-space: nowrap;
+            border: 1px solid;
         }
-        .badge-runpod { background: rgba(102,126,234,0.15); color: #667eea; border: 1px solid rgba(102,126,234,0.3); }
-        .badge-vast { background: rgba(168,85,247,0.15); color: #a855f7; border: 1px solid rgba(168,85,247,0.3); }
 
-        /* ── Side-by-side ── */
-        .comparison-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        .comparison-panel {
-            background: #1a1f2e; border-radius: 12px; border: 1px solid #2a2f3e; overflow: hidden;
+        /* ── Sortable columns ── */
+        th.sortable {
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+            padding-right: 28px;
         }
-        .comparison-panel h3 {
-            padding: 16px 20px; background: #252b3d;
-            font-size: 1em; font-weight: 600;
-        }
+        th.sortable:hover { color: #67e8f9; }
+        th.sort-asc::after  { content: ' ↑'; color: #4ade80; }
+        th.sort-desc::after { content: ' ↓'; color: #4ade80; }
 
         /* ── Best deals ── */
         .deals-section {
@@ -196,7 +196,7 @@
         }
 
         @media (max-width: 768px) {
-            .comparison-grid { grid-template-columns: 1fr; }
+            table { font-size: 0.85em; }
         }
     </style>
 </head>
@@ -210,25 +210,25 @@
 
     <header>
         <h1>🖥️ GPU Rental Pricing</h1>
-        <p class="subtitle">RunPod vs Vast.ai — spot, on-demand, and market rates across all GPU types</p>
+        <p class="subtitle">Spot, on-demand, and reserved rates across all GPU rental providers</p>
     </header>
 
     <div class="stats">
         <div class="stat-card">
             <div class="stat-number" id="stat-total">–</div>
-            <div class="stat-label">Total GPU Types</div>
+            <div class="stat-label">GPU Models</div>
         </div>
         <div class="stat-card">
-            <div class="stat-number" id="stat-runpod">–</div>
-            <div class="stat-label">RunPod GPU Types</div>
+            <div class="stat-number" id="stat-providers">–</div>
+            <div class="stat-label">Providers</div>
         </div>
         <div class="stat-card">
-            <div class="stat-number" id="stat-vast">–</div>
-            <div class="stat-label">Vast.ai GPU Types</div>
+            <div class="stat-number" id="stat-listings">–</div>
+            <div class="stat-label">Total Listings</div>
         </div>
         <div class="stat-card">
-            <div class="stat-number" id="stat-savings">–</div>
-            <div class="stat-label">Avg Savings (Vast vs RunPod)</div>
+            <div class="stat-number" id="stat-cheapest">–</div>
+            <div class="stat-label">Cheapest /hr</div>
         </div>
     </div>
 
@@ -247,13 +247,18 @@
                 <div class="chip" data-vram="64+">64+ GB</div>
             </div>
         </div>
+        <div class="control-group">
+            <label>Provider</label>
+            <div class="chips" id="providerChips">
+                <div class="chip active" data-provider="all">All</div>
+            </div>
+        </div>
     </div>
 
     <div class="timestamp-bar" id="timestamp"></div>
 
     <div class="tabs">
-        <button class="tab active" data-view="combined">Combined</button>
-        <button class="tab" data-view="sidebyside">Side-by-Side</button>
+        <button class="tab active" data-view="combined">All GPUs</button>
         <button class="tab" data-view="deals">Best Deals</button>
     </div>
 
@@ -261,10 +266,6 @@
         <div id="combined-container">
             <div class="no-data">Loading...</div>
         </div>
-    </div>
-
-    <div id="sidebyside-view" class="view">
-        <div id="sidebyside-container"></div>
     </div>
 
     <div id="deals-view" class="view">
@@ -275,11 +276,38 @@
 <script>
     const CHART_COLORS = ['#06b6d4','#4ade80','#f59e0b','#ef4444','#a855f7','#667eea','#f97316','#84cc16'];
 
+    // Stable color assignment per provider name
+    const PROVIDER_PALETTE = [
+        { bg: 'rgba(102,126,234,0.15)', color: '#667eea', border: 'rgba(102,126,234,0.3)' },
+        { bg: 'rgba(168,85,247,0.15)',  color: '#a855f7', border: 'rgba(168,85,247,0.3)' },
+        { bg: 'rgba(6,182,212,0.15)',   color: '#06b6d4', border: 'rgba(6,182,212,0.3)' },
+        { bg: 'rgba(74,222,128,0.15)',  color: '#4ade80', border: 'rgba(74,222,128,0.3)' },
+        { bg: 'rgba(245,158,11,0.15)',  color: '#f59e0b', border: 'rgba(245,158,11,0.3)' },
+        { bg: 'rgba(239,68,68,0.15)',   color: '#ef4444', border: 'rgba(239,68,68,0.3)' },
+        { bg: 'rgba(249,115,22,0.15)',  color: '#f97316', border: 'rgba(249,115,22,0.3)' },
+        { bg: 'rgba(132,204,22,0.15)',  color: '#84cc16', border: 'rgba(132,204,22,0.3)' },
+    ];
+    const _providerColorCache = {};
+    function providerColor(name) {
+        if (!_providerColorCache[name]) {
+            const idx = Object.keys(_providerColorCache).length % PROVIDER_PALETTE.length;
+            _providerColorCache[name] = PROVIDER_PALETTE[idx];
+        }
+        return _providerColorCache[name];
+    }
+    function badgeHtml(providerName) {
+        const c = providerColor(providerName);
+        return `<span class="badge" style="background:${c.bg};color:${c.color};border-color:${c.border}">${escapeHtml(providerName)}</span>`;
+    }
+
     let gpuData = null;
     let filteredData = [];
     let currentVram = 'all';
     let currentSearch = '';
+    let currentProvider = 'all';
     let currentView = 'combined';
+    let sortColumn = 'bestPrice';
+    let sortDirection = 'asc';
     let expandedHistories = new Map();  // safeId -> Chart instance
 
     async function loadData() {
@@ -296,34 +324,42 @@
         }
     }
 
-    function updateStats() {
-        if (!gpuData) return;
-        const rp = gpuData.runpod?.total_gpus || 0;
-        const va = gpuData.vast?.total_gpu_types || 0;
-        document.getElementById('stat-total').textContent = rp + va;
-        document.getElementById('stat-runpod').textContent = rp;
-        document.getElementById('stat-vast').textContent = va;
-        document.getElementById('stat-savings').textContent = calcAvgSavings();
+    // Returns all provider keys in gpuData (any key whose value has a gpus array)
+    function getProviderKeys() {
+        if (!gpuData) return [];
+        return Object.keys(gpuData).filter(k => Array.isArray(gpuData[k]?.gpus));
     }
 
-    function calcAvgSavings() {
-        if (!gpuData) return '–';
-        const rpGpus = gpuData.runpod?.gpus || [];
-        const vaGpus = gpuData.vast?.gpus || [];
-        let total = 0, count = 0;
-        rpGpus.forEach(rp => {
-            const match = vaGpus.find(v =>
-                normalizeGpuName(v.name) === normalizeGpuName(rp.name)
-            );
-            if (!match) return;
-            const rpPrice = rp.pricing.community_spot || rp.pricing.community_on_demand || rp.pricing.secure_on_demand;
-            const vaPrice = match.pricing.rentable_min || match.pricing.min;
-            if (rpPrice && vaPrice && rpPrice > 0) {
-                const savings = (rpPrice - vaPrice) / rpPrice * 100;
-                if (savings > 0) { total += savings; count++; }
-            }
+    function updateStats() {
+        if (!gpuData) return;
+        const providerKeys = getProviderKeys();
+        const allGpus = buildCombined();
+        const uniqueModels = new Set(allGpus.map(g => normalizeGpuName(g.name))).size;
+        const prices = allGpus.map(g => g.bestPrice).filter(p => p && p > 0);
+        const cheapest = prices.length ? `$${Math.min(...prices).toFixed(3)}` : '–';
+
+        document.getElementById('stat-total').textContent = uniqueModels;
+        document.getElementById('stat-providers').textContent = providerKeys.length;
+        document.getElementById('stat-listings').textContent = allGpus.length;
+        document.getElementById('stat-cheapest').textContent = cheapest;
+
+        // Populate provider filter chips dynamically
+        const chipsEl = document.getElementById('providerChips');
+        const existing = new Set([...chipsEl.querySelectorAll('.chip')].map(c => c.dataset.provider));
+        providerKeys.forEach(key => {
+            if (existing.has(key)) return;
+            const chip = document.createElement('div');
+            chip.className = 'chip';
+            chip.dataset.provider = key;
+            chip.textContent = gpuData[key].name || key;
+            chip.addEventListener('click', () => {
+                chipsEl.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+                chip.classList.add('active');
+                currentProvider = key;
+                applyFilters();
+            });
+            chipsEl.appendChild(chip);
         });
-        return count > 0 ? `${(total / count).toFixed(0)}%` : '–';
     }
 
     function updateTimestamp() {
@@ -337,27 +373,43 @@
         return n.toLowerCase().replace(/[\s\-_]+/g,'').replace(/nvidia|amd/g,'');
     }
 
-    function getBestPrice(gpu) {
-        if (gpu.provider === 'runpod') {
-            return gpu.pricing.community_spot || gpu.pricing.community_on_demand || gpu.pricing.secure_on_demand;
-        }
-        return gpu.pricing.rentable_min || gpu.pricing.min;
+    // Generic best-price extractor — tries all known pricing field names
+    function getBestPrice(pricing) {
+        return pricing.best_price
+            || pricing.community_spot
+            || pricing.community_on_demand
+            || pricing.min_price
+            || pricing.rentable_min
+            || pricing.min
+            || pricing.secure_on_demand
+            || null;
     }
 
     function buildCombined() {
         const out = [];
-        (gpuData?.runpod?.gpus || []).forEach(g => out.push({
-            provider: 'runpod', name: g.name, vram: g.vram_gb || 0,
-            pricing: g.pricing, bestPrice: getBestPrice({provider:'runpod', pricing:g.pricing}),
-            secureAvail: g.secure_cloud_available, communityAvail: g.community_cloud_available,
-            raw: g,
-        }));
-        (gpuData?.vast?.gpus || []).forEach(g => out.push({
-            provider: 'vast', name: g.name, vram: g.vram_gb || 0,
-            pricing: g.pricing, bestPrice: g.pricing.rentable_min || g.pricing.min,
-            totalOffers: g.total_offers, rentableOffers: g.rentable_offers,
-            raw: g,
-        }));
+        getProviderKeys().forEach(key => {
+            const provData = gpuData[key];
+            const providerLabel = provData.name || key;
+            (provData.gpus || []).forEach(g => {
+                const pricing = g.pricing || {};
+                out.push({
+                    provider: key,
+                    providerLabel,
+                    name: g.name,
+                    vram: g.vram_gb || g.vram || 0,
+                    pricing,
+                    bestPrice: getBestPrice(pricing),
+                    availability: g.available !== undefined
+                        ? (g.available ? 'Available' : 'Not available')
+                        : (g.rentable_offers != null ? `${g.rentable_offers}/${g.total_offers || '?'} rentable` : '–'),
+                    // Server specs (populated when available)
+                    cpu: g.cpu || null,
+                    ram_gb: g.ram_gb || null,
+                    storage_gb: g.storage_gb || null,
+                    raw: g,
+                });
+            });
+        });
         return out;
     }
 
@@ -365,6 +417,7 @@
         const all = buildCombined();
         filteredData = all.filter(gpu => {
             if (currentSearch && !gpu.name.toLowerCase().includes(currentSearch)) return false;
+            if (currentProvider !== 'all' && gpu.provider !== currentProvider) return false;
             if (currentVram !== 'all') {
                 const v = gpu.vram || 0;
                 if (currentVram === '8-16'  && (v < 8  || v >= 16)) return false;
@@ -378,9 +431,8 @@
     }
 
     function renderCurrentView() {
-        if (currentView === 'combined')  renderCombined();
-        if (currentView === 'sidebyside') renderSideBySide();
-        if (currentView === 'deals')     renderDeals();
+        if (currentView === 'combined') renderCombined();
+        if (currentView === 'deals')    renderDeals();
     }
 
     function formatPrice(p) {
@@ -400,8 +452,38 @@
 
     // ── Combined view ──────────────────────────────────────────────────────
 
+    function sortData(data) {
+        const dir = sortDirection === 'asc' ? 1 : -1;
+        return [...data].sort((a, b) => {
+            switch (sortColumn) {
+                case 'name':      return dir * a.name.localeCompare(b.name);
+                case 'provider':  return dir * a.provider.localeCompare(b.provider);
+                case 'vram':      return dir * ((a.vram || 0) - (b.vram || 0));
+                case 'bestPrice': return dir * ((a.bestPrice || 9999) - (b.bestPrice || 9999));
+                default:          return 0;
+            }
+        });
+    }
+
+    function thHtml(label, col) {
+        const cls = sortColumn === col
+            ? `sortable sort-${sortDirection}`
+            : 'sortable';
+        return `<th class="${cls}" onclick="setSort('${col}')">${label}</th>`;
+    }
+
+    function setSort(col) {
+        if (sortColumn === col) {
+            sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            sortColumn = col;
+            sortDirection = col === 'bestPrice' ? 'asc' : 'asc';
+        }
+        renderCombined();
+    }
+
     function renderCombined() {
-        const sorted = [...filteredData].sort((a, b) => (a.bestPrice || 999) - (b.bestPrice || 999));
+        const sorted = sortData(filteredData);
         if (!sorted.length) {
             document.getElementById('combined-container').innerHTML =
                 '<div class="no-data">No GPUs match the current filters.</div>';
@@ -411,20 +493,23 @@
         const rows = sorted.map(gpu => {
             const safeId = (gpu.provider + '_' + gpu.name).replace(/[^a-zA-Z0-9]/g, '_');
             const allPricesHtml = buildAllPricesHtml(gpu);
-            const avail = gpu.provider === 'vast'
-                ? `${gpu.rentableOffers}/${gpu.totalOffers} rentable`
-                : (gpu.communityAvail ? '✅ Available' : '❌ Not available');
+            const serverSpecs = [
+                gpu.cpu  ? `CPU: ${gpu.cpu}`        : null,
+                gpu.ram_gb     ? `RAM: ${gpu.ram_gb}GB`   : null,
+                gpu.storage_gb ? `Disk: ${gpu.storage_gb}GB` : null,
+            ].filter(Boolean).join(' · ');
             return `
                 <tr class="gpu-row" onclick="toggleHistory('${safeId}','${escapeHtml(gpu.name)}','${gpu.provider}')" title="Click to show price history">
                     <td>
                         <span class="gpu-chevron" id="chev-${safeId}">&#9654;</span>
                         <strong>${escapeHtml(gpu.name)}</strong>
+                        ${serverSpecs ? `<div style="font-size:0.78em;color:#a0a0a0;margin-top:2px">${escapeHtml(serverSpecs)}</div>` : ''}
                     </td>
-                    <td><span class="badge badge-${gpu.provider}">${gpu.provider}</span></td>
+                    <td>${badgeHtml(gpu.providerLabel)}</td>
                     <td>${gpu.vram ? gpu.vram + ' GB' : '–'}</td>
                     <td>${formatPrice(gpu.bestPrice)}</td>
                     <td><span class="price-secondary">${allPricesHtml}</span></td>
-                    <td>${avail}</td>
+                    <td>${gpu.availability}</td>
                 </tr>
                 <tr class="gpu-history-row">
                     <td colspan="6">
@@ -440,10 +525,10 @@
             <table>
                 <thead>
                     <tr>
-                        <th>GPU Model</th>
-                        <th>Provider</th>
-                        <th>VRAM</th>
-                        <th>Best Price</th>
+                        ${thHtml('GPU Model', 'name')}
+                        ${thHtml('Provider', 'provider')}
+                        ${thHtml('VRAM', 'vram')}
+                        ${thHtml('Best Price', 'bestPrice')}
                         <th>All Prices</th>
                         <th>Availability</th>
                     </tr>
@@ -453,92 +538,76 @@
         `;
     }
 
+    const PRICE_FIELD_LABELS = {
+        community_spot:      'Spot',
+        community_on_demand: 'Community OD',
+        secure_on_demand:    'Secure OD',
+        rentable_min:        'Min',
+        min:                 'Min',
+        avg:                 'Avg',
+        best_price:          'Best',
+        min_price:           'Min',
+        reserved:            'Reserved',
+    };
+
     function buildAllPricesHtml(gpu) {
         const parts = [];
-        if (gpu.provider === 'runpod') {
-            const p = gpu.pricing;
-            if (p.community_spot)      parts.push(`Spot: $${p.community_spot.toFixed(3)}`);
-            if (p.community_on_demand) parts.push(`Comm: $${p.community_on_demand.toFixed(3)}`);
-            if (p.secure_on_demand)    parts.push(`Sec: $${p.secure_on_demand.toFixed(3)}`);
-        } else {
-            const p = gpu.pricing;
-            if (p.rentable_min != null) parts.push(`Min: $${p.rentable_min.toFixed(3)}`);
-            if (p.avg != null)          parts.push(`Avg: $${p.avg.toFixed(3)}`);
+        const p = gpu.pricing;
+        const seen = new Set();
+        for (const [field, label] of Object.entries(PRICE_FIELD_LABELS)) {
+            if (p[field] != null && !seen.has(label)) {
+                seen.add(label);
+                parts.push(`${label}: $${(+p[field]).toFixed(3)}`);
+            }
         }
         return parts.join(' · ') || '–';
-    }
-
-    // ── Side-by-side view ──────────────────────────────────────────────────
-
-    function renderSideBySide() {
-        const rp = filteredData.filter(g => g.provider === 'runpod')
-            .sort((a, b) => (a.bestPrice || 999) - (b.bestPrice || 999));
-        const va = filteredData.filter(g => g.provider === 'vast')
-            .sort((a, b) => (a.bestPrice || 999) - (b.bestPrice || 999));
-
-        function providerTable(gpus, prov) {
-            if (!gpus.length) return '<div class="no-data" style="padding:30px">No GPUs match filters</div>';
-            const rows = gpus.slice(0, 20).map(g => `
-                <tr>
-                    <td><strong>${escapeHtml(g.name)}</strong></td>
-                    <td>${g.vram ? g.vram + ' GB' : '–'}</td>
-                    <td>${formatPrice(g.bestPrice)}</td>
-                </tr>`).join('');
-            const more = gpus.length > 20 ? `<tr><td colspan="3" style="text-align:center;color:#a0a0a0;padding:12px">+${gpus.length - 20} more</td></tr>` : '';
-            return `<table><thead><tr><th>GPU</th><th>VRAM</th><th>Best Price</th></tr></thead><tbody>${rows}${more}</tbody></table>`;
-        }
-
-        document.getElementById('sidebyside-container').innerHTML = `
-            <div class="comparison-grid">
-                <div class="comparison-panel">
-                    <h3>🟦 RunPod (${rp.length} GPUs)</h3>
-                    ${providerTable(rp, 'runpod')}
-                </div>
-                <div class="comparison-panel">
-                    <h3>🟪 Vast.ai (${va.length} GPUs)</h3>
-                    ${providerTable(va, 'vast')}
-                </div>
-            </div>`;
     }
 
     // ── Best deals view ────────────────────────────────────────────────────
 
     function renderDeals() {
-        const rpGpus = gpuData?.runpod?.gpus || [];
-        const vaGpus = gpuData?.vast?.gpus || [];
-
-        const comparisons = [];
-        rpGpus.forEach(rp => {
-            const match = vaGpus.find(v => normalizeGpuName(v.name) === normalizeGpuName(rp.name));
-            if (!match) return;
-            const rpPrice = rp.pricing.community_spot || rp.pricing.community_on_demand;
-            const vaPrice = match.pricing.rentable_min || match.pricing.min;
-            if (rpPrice && vaPrice) {
-                comparisons.push({
-                    name: rp.name, vram: rp.vram_gb,
-                    runpodPrice: rpPrice, vastPrice: vaPrice,
-                    savings: (rpPrice - vaPrice) / rpPrice * 100,
-                });
-            }
-        });
-        comparisons.sort((a, b) => b.savings - a.savings);
-
         const allData = buildCombined();
-        const cheapest = [...allData].sort((a, b) => (a.bestPrice || 999) - (b.bestPrice || 999)).slice(0, 12);
 
-        const savingsRows = comparisons.filter(c => c.savings > 0).slice(0, 20).map(c => `
+        // Group by normalized GPU name → find price spread across providers
+        const byModel = {};
+        allData.forEach(g => {
+            const key = normalizeGpuName(g.name);
+            if (!byModel[key]) byModel[key] = { name: g.name, vram: g.vram, entries: [] };
+            if (g.bestPrice) byModel[key].entries.push(g);
+        });
+
+        const spreads = Object.values(byModel)
+            .filter(m => m.entries.length >= 2)
+            .map(m => {
+                const sorted = [...m.entries].sort((a, b) => a.bestPrice - b.bestPrice);
+                const cheapest = sorted[0];
+                const priciest = sorted[sorted.length - 1];
+                return {
+                    name: m.name, vram: m.vram,
+                    cheapest, priciest,
+                    spread: Math.round((priciest.bestPrice - cheapest.bestPrice) / cheapest.bestPrice * 100),
+                    providerCount: m.entries.length,
+                };
+            })
+            .filter(s => s.spread > 0)
+            .sort((a, b) => b.spread - a.spread);
+
+        const cheapest12 = [...allData].sort((a, b) => (a.bestPrice || 999) - (b.bestPrice || 999)).slice(0, 12);
+
+        const spreadRows = spreads.slice(0, 20).map(s => `
             <tr>
-                <td><strong>${escapeHtml(c.name)}</strong></td>
-                <td>${c.vram || '–'} GB</td>
-                <td class="price price-high">${fmtPriceRaw(c.runpodPrice)}</td>
-                <td>${formatPrice(c.vastPrice)}</td>
-                <td><span class="savings">${c.savings.toFixed(0)}% cheaper</span></td>
-            </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:#a0a0a0;padding:20px">Not enough matched GPU types to compare</td></tr>';
+                <td><strong>${escapeHtml(s.name)}</strong></td>
+                <td>${s.vram || '–'} GB</td>
+                <td>${s.providerCount}</td>
+                <td>${formatPrice(s.cheapest.bestPrice)} <span style="color:#a0a0a0;font-size:0.82em">(${badgeHtml(s.cheapest.providerLabel)})</span></td>
+                <td class="price price-high">${fmtPriceRaw(s.priciest.bestPrice)} <span style="color:#a0a0a0;font-size:0.82em">(${badgeHtml(s.priciest.providerLabel)})</span></td>
+                <td><span class="savings">${s.spread}% spread</span></td>
+            </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;color:#a0a0a0;padding:20px">No matching GPU types across providers yet.</td></tr>';
 
-        const cheapestRows = cheapest.map(g => `
+        const cheapestRows = cheapest12.map(g => `
             <tr>
                 <td><strong>${escapeHtml(g.name)}</strong></td>
-                <td><span class="badge badge-${g.provider}">${g.provider}</span></td>
+                <td>${badgeHtml(g.providerLabel)}</td>
                 <td>${g.vram || '–'} GB</td>
                 <td>${formatPrice(g.bestPrice)}</td>
                 <td>${g.vram && g.bestPrice ? `$${(g.bestPrice / g.vram).toFixed(4)}/GB` : '–'}</td>
@@ -546,13 +615,13 @@
 
         document.getElementById('deals-container').innerHTML = `
             <div class="deals-section">
-                <div class="deals-section-header">🎯 Top Savings — Vast.ai vs RunPod</div>
+                <div class="deals-section-header">🎯 Best Price Spread — Same GPU, Different Providers</div>
                 <table>
                     <thead><tr>
-                        <th>GPU Model</th><th>VRAM</th>
-                        <th>RunPod Price</th><th>Vast.ai Price</th><th>Savings</th>
+                        <th>GPU Model</th><th>VRAM</th><th>Providers</th>
+                        <th>Cheapest</th><th>Priciest</th><th>Spread</th>
                     </tr></thead>
-                    <tbody>${savingsRows}</tbody>
+                    <tbody>${spreadRows}</tbody>
                 </table>
             </div>
             <div class="deals-section">
@@ -560,7 +629,7 @@
                 <table>
                     <thead><tr>
                         <th>GPU Model</th><th>Provider</th><th>VRAM</th>
-                        <th>Price/Hour</th><th>Price/GB</th>
+                        <th>Price/Hour</th><th>Price/GB VRAM</th>
                     </tr></thead>
                     <tbody>${cheapestRows}</tbody>
                 </table>
@@ -603,25 +672,33 @@
 
             const labels = data.history.map(h => h.date);
 
-            // Determine which price series exist
+            // Determine which price series exist — dynamically from history keys
+            const SERIES_LABELS = {
+                community_spot:      'Spot',
+                community_on_demand: 'Community OD',
+                secure_on_demand:    'Secure OD',
+                vast_min:            'Vast Min',
+                vast_avg:            'Vast Avg',
+                min_price:           'Min',
+                avg_price:           'Avg',
+                reserved:            'Reserved',
+            };
+            const allKeys = data.history.length > 0
+                ? Object.keys(data.history[0]).filter(k => k !== 'date' && typeof data.history[0][k] === 'number')
+                : [];
             const datasets = [];
-            const addSeries = (label, key, colorIdx) => {
+            allKeys.forEach((key, idx) => {
                 const vals = data.history.map(h => h[key] != null ? +h[key].toFixed(4) : null);
                 if (vals.some(v => v != null)) {
                     datasets.push({
-                        label, data: vals,
-                        borderColor: CHART_COLORS[colorIdx % CHART_COLORS.length],
-                        backgroundColor: CHART_COLORS[colorIdx % CHART_COLORS.length] + '22',
+                        label: SERIES_LABELS[key] || key,
+                        data: vals,
+                        borderColor: CHART_COLORS[idx % CHART_COLORS.length],
+                        backgroundColor: CHART_COLORS[idx % CHART_COLORS.length] + '22',
                         tension: 0.3, fill: false, pointRadius: 3, spanGaps: true,
                     });
                 }
-            };
-
-            addSeries('RunPod Spot',        'community_spot',      0);
-            addSeries('RunPod Community OD', 'community_on_demand', 1);
-            addSeries('RunPod Secure OD',    'secure_on_demand',    2);
-            addSeries('Vast.ai Min',         'vast_min',            3);
-            addSeries('Vast.ai Avg',         'vast_avg',            4);
+            });
 
             if (!datasets.length) {
                 el.innerHTML = '<div style="text-align:center;color:#a0a0a0;padding:20px;font-size:0.85em;">No price data in history.</div>';
@@ -666,6 +743,16 @@
             currentVram = chip.dataset.vram;
             applyFilters();
         });
+    });
+
+    // Provider chips — "All" chip is static; others added dynamically in updateStats()
+    document.getElementById('providerChips').addEventListener('click', e => {
+        const chip = e.target.closest('.chip');
+        if (!chip) return;
+        document.querySelectorAll('#providerChips .chip').forEach(c => c.classList.remove('active'));
+        chip.classList.add('active');
+        currentProvider = chip.dataset.provider;
+        applyFilters();
     });
 
     document.querySelectorAll('.tab').forEach(tab => {

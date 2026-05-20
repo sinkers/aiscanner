@@ -16,6 +16,33 @@ Environment variables (set by CDK):
   OPENROUTER_API_TOKEN    bearer token for /endpoints API
   RUNPOD_API_KEY          RunPod GraphQL API key (optional)
   VAST_API_KEY            Vast.ai REST API key (optional)
+
+==============================================================================
+HISTORICAL DATA PROTECTION — DO NOT REMOVE OR MODIFY THESE INVARIANTS
+==============================================================================
+The following rules preserve the integrity of all historical pricing data:
+
+1. DAILY SNAPSHOTS ARE WRITE-ONCE.
+   snapshots/YYYY-MM-DD.json and snapshots/gpu/YYYY-MM-DD.json are written
+   once per day and must NEVER be overwritten. They are the raw archive.
+
+2. ROLLUP HISTORIES ARE APPEND-ONLY.
+   The `history` arrays in rollups/providers/*.json, rollups/models/*.json,
+   and rollups/gpu/history/*.json are append-only. Only the entry for TODAY
+   may be replaced (idempotent re-run protection). Past dates must never be
+   modified or deleted.
+
+3. NEVER TRUNCATE HISTORY ARRAYS.
+   Do not slice, cap, or trim history arrays regardless of length.
+
+4. GUARD AGAINST EMPTY FETCHES.
+   Before writing any rollup, verify the upstream fetch returned data. An
+   empty or failed fetch must abort the write — never overwrite good data
+   with an empty result.
+
+The S3 bucket has versioning enabled as a safety net. If you must recover a
+file, use `aws s3api list-object-versions` to find and restore a prior version.
+==============================================================================
 """
 
 import json
@@ -30,11 +57,37 @@ from collections import defaultdict
 
 S3_BUCKET = os.environ["S3_BUCKET"]
 API_TOKEN = os.environ["OPENROUTER_API_TOKEN"]
-RUNPOD_API_KEY = os.environ.get("RUNPOD_API_KEY", "")
-VAST_API_KEY = os.environ.get("VAST_API_KEY", "")
 BASE_URL = "https://openrouter.ai/api/v1"
 
 s3 = boto3.client("s3")
+
+
+def _ssm_get(name):
+    """Read a SecureString from SSM Parameter Store; return '' on any error."""
+    try:
+        ssm = boto3.client("ssm")
+        resp = ssm.get_parameter(Name=name, WithDecryption=True)
+        return resp["Parameter"]["Value"]
+    except Exception:
+        return ""
+
+
+def _load_gpu_keys():
+    """
+    GPU API keys are optional. Resolution order:
+      1. Environment variable (set at deploy time, fine for dev)
+      2. SSM Parameter Store  (set once post-deploy, no redeploy needed)
+    """
+    runpod = os.environ.get("RUNPOD_API_KEY", "")
+    vast   = os.environ.get("VAST_API_KEY", "")
+    if not runpod:
+        runpod = _ssm_get("/dame/gpu/runpod_api_key")
+    if not vast:
+        vast = _ssm_get("/dame/gpu/vast_api_key")
+    return runpod, vast
+
+
+RUNPOD_API_KEY, VAST_API_KEY = _load_gpu_keys()
 
 
 # ---------------------------------------------------------------------------
@@ -515,6 +568,151 @@ def update_gpu_rollups(gpu_snapshot, today):
 
 
 # ---------------------------------------------------------------------------
+# Daily Report Generation (Advanced Features)
+# ---------------------------------------------------------------------------
+
+def categorize_models_by_features(models):
+    """Categorize models by advanced features (TTS, STT, video, image gen)."""
+    features = {
+        'stt': [],
+        'tts': [],
+        'stt_tts': [],
+        'video_input': [],
+        'image_gen': [],
+    }
+
+    for model in models:
+        model_id = model['id']
+        arch = model.get('architecture', {})
+        input_mods = arch.get('input_modalities', [])
+        output_mods = arch.get('output_modalities', [])
+
+        has_audio_in = 'audio' in input_mods
+        has_audio_out = 'audio' in output_mods
+        has_video_in = 'video' in input_mods
+        has_image_out = 'image' in output_mods
+
+        model_info = {
+            'id': model_id,
+            'name': model['name'],
+            'modality': arch.get('modality', 'unknown'),
+            'pricing': model.get('pricing', {}),
+        }
+
+        if has_audio_in and has_audio_out:
+            features['stt_tts'].append(model_info)
+        elif has_audio_in:
+            features['stt'].append(model_info)
+        elif has_audio_out:
+            features['tts'].append(model_info)
+
+        if has_video_in:
+            features['video_input'].append(model_info)
+        if has_image_out:
+            features['image_gen'].append(model_info)
+
+    return features
+
+
+def calculate_pricing_stats(models):
+    """Calculate pricing statistics for a set of models."""
+    if not models:
+        return {'min': 0, 'max': 0, 'avg': 0, 'free_count': 0, 'paid_count': 0}
+
+    prices = []
+    free_count = 0
+
+    for model in models:
+        pricing = model.get('pricing', {})
+        prompt = float(pricing.get('prompt', 0))
+        completion = float(pricing.get('completion', 0))
+        total = prompt + completion
+
+        if total < 0:  # Skip placeholder prices
+            continue
+        if total == 0:
+            free_count += 1
+        else:
+            prices.append(total)
+
+    if not prices:
+        return {'min': 0, 'max': 0, 'avg': 0, 'free_count': free_count, 'paid_count': 0}
+
+    return {
+        'min': min(prices) * 1_000_000,
+        'max': max(prices) * 1_000_000,
+        'avg': (sum(prices) / len(prices)) * 1_000_000,
+        'free_count': free_count,
+        'paid_count': len(prices),
+    }
+
+
+def analyze_providers_by_features(infra_map, feature_models):
+    """Analyze which providers support which features."""
+    feature_model_ids = {
+        feature: set(m['id'] for m in models)
+        for feature, models in feature_models.items()
+    }
+
+    provider_features = {}
+    for provider_name, provider_data in infra_map.items():
+        feature_counts = {k: 0 for k in feature_model_ids.keys()}
+
+        for model in provider_data.get('models', []):
+            model_id = model.get('model_id', '')
+            for feature, model_ids in feature_model_ids.items():
+                if model_id in model_ids:
+                    feature_counts[feature] += 1
+
+        provider_features[provider_name] = {
+            'feature_counts': feature_counts,
+            'total_advanced': sum(feature_counts.values()),
+        }
+
+    return provider_features
+
+
+def generate_daily_report(models, infra_map):
+    """Generate daily report with advanced features analysis."""
+    feature_models = categorize_models_by_features(models)
+
+    report = {
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'overall_stats': {
+            'total_models': len(models),
+            'total_providers': len(infra_map),
+            'advanced_feature_models': len(set(
+                m['id'] for feature in feature_models.values() for m in feature
+            )),
+        },
+        'feature_stats': {},
+        'provider_rankings': [],
+    }
+
+    # Calculate stats for each feature
+    for feature_name, feature_model_list in feature_models.items():
+        report['feature_stats'][feature_name] = {
+            'count': len(feature_model_list),
+            'pricing': calculate_pricing_stats(feature_model_list),
+            'model_ids': [m['id'] for m in feature_model_list],
+        }
+
+    # Analyze providers
+    provider_features = analyze_providers_by_features(infra_map, feature_models)
+    providers_with_features = [
+        {'name': name, **data}
+        for name, data in provider_features.items()
+        if data['total_advanced'] > 0
+    ]
+    providers_with_features.sort(key=lambda x: x['total_advanced'], reverse=True)
+    report['provider_rankings'] = providers_with_features[:20]
+
+    report['overall_stats']['providers_with_features'] = len(providers_with_features)
+
+    return report
+
+
+# ---------------------------------------------------------------------------
 # Lambda entry point
 # ---------------------------------------------------------------------------
 
@@ -592,6 +790,12 @@ def handler(event, context):
         print(f"GPU pricing saved: {len(runpod_gpus)} RunPod + {len(vast_gpus)} Vast.ai")
     else:
         print("GPU API keys not configured — skipping GPU pricing collection")
+
+    # Daily report with advanced features (TTS, STT, video, image gen)
+    print("Generating daily report with advanced features...")
+    daily_report = generate_daily_report(models, infra_map)
+    s3_put_json("rollups/daily_report.json", daily_report, cache_seconds=3600)
+    print(f"Daily report saved: {daily_report['overall_stats']['advanced_feature_models']} models with advanced features")
 
     print("Done.")
     return {"statusCode": 200, "date": today}

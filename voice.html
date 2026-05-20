@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice & Video AI Services - DAME</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f1419;
+            color: #e0e0e0;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        a { color: #667eea; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+
+        .breadcrumb {
+            margin-bottom: 20px;
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        header {
+            background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%);
+            padding: 40px 20px;
+            text-align: center;
+            margin-bottom: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(245, 158, 11, 0.2);
+        }
+
+        h1 { font-size: 2.2em; margin-bottom: 8px; color: white; }
+        .subtitle { font-size: 1.05em; opacity: 0.9; color: white; }
+
+        /* Stats */
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 16px;
+            margin-bottom: 28px;
+        }
+
+        .stat-card {
+            background: #1a1f2e;
+            padding: 16px;
+            border-radius: 10px;
+            border: 1px solid #2a2f3e;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .stat-label { font-size: 0.8em; color: #888; margin-top: 4px; }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            background: #1a1f2e;
+            padding: 6px;
+            border-radius: 10px;
+        }
+
+        .tab {
+            padding: 10px 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 0.9em;
+            color: #888;
+            transition: all 0.2s;
+            border: none;
+            background: none;
+        }
+
+        .tab:hover { color: #e0e0e0; background: #2a2f3e; }
+        .tab.active { background: #2a2f3e; color: #f59e0b; font-weight: 600; }
+
+        /* Filters */
+        .filters {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .filter-group { display: flex; flex-direction: column; gap: 4px; }
+        .filter-label { font-size: 0.75em; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
+
+        input, select {
+            background: #1a1f2e;
+            border: 1px solid #2a2f3e;
+            color: #e0e0e0;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 0.9em;
+        }
+
+        input:focus, select:focus { outline: none; border-color: #f59e0b; }
+        input[type="text"] { width: 220px; }
+
+        .toggle-group {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .toggle {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85em;
+            background: #1a1f2e;
+            border: 1px solid #2a2f3e;
+            color: #888;
+            transition: all 0.2s;
+        }
+
+        .toggle.active { background: rgba(245, 158, 11, 0.15); border-color: #f59e0b; color: #f59e0b; }
+
+        /* Table */
+        .table-container {
+            overflow-x: auto;
+            border-radius: 10px;
+            border: 1px solid #2a2f3e;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.88em;
+        }
+
+        th {
+            background: #1a1f2e;
+            padding: 12px 14px;
+            text-align: left;
+            font-weight: 600;
+            color: #888;
+            border-bottom: 1px solid #2a2f3e;
+            white-space: nowrap;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        th:hover { color: #f59e0b; }
+        th.sorted { color: #f59e0b; }
+        th .sort-arrow { margin-left: 4px; font-size: 0.8em; }
+
+        td {
+            padding: 10px 14px;
+            border-bottom: 1px solid #1a1f2e;
+            vertical-align: middle;
+        }
+
+        tr:hover td { background: #1a1f2e; }
+
+        .provider-name {
+            font-weight: 600;
+            color: #e0e0e0;
+            cursor: pointer;
+        }
+
+        .provider-name:hover { color: #f59e0b; }
+
+        .model-name { color: #a0a0a0; font-size: 0.9em; }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.78em;
+            font-weight: 500;
+        }
+
+        .badge-stt { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+        .badge-tts { background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); }
+        .badge-image { background: rgba(34, 197, 94, 0.15); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.3); }
+        .badge-video { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+        .badge-music { background: rgba(236, 72, 153, 0.15); color: #f472b6; border: 1px solid rgba(236, 72, 153, 0.3); }
+        .badge-streaming { background: rgba(6, 182, 212, 0.12); color: #67e8f9; border: 1px solid rgba(6, 182, 212, 0.25); }
+        .badge-realtime { background: rgba(16, 185, 129, 0.12); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.25); }
+        .badge-opensource { background: rgba(251, 191, 36, 0.12); color: #fde047; border: 1px solid rgba(251, 191, 36, 0.25); }
+        .badge-free { background: rgba(34, 197, 94, 0.15); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.3); }
+
+        .price { font-weight: 600; color: #4ade80; }
+        .price-free { color: #4ade80; font-weight: 700; }
+
+        .connection-icons {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+        }
+
+        .conn-badge {
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.72em;
+            background: #2a2f3e;
+            color: #888;
+        }
+
+        .conn-badge.active { background: rgba(6, 182, 212, 0.15); color: #67e8f9; }
+
+        .no-results {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+
+        .results-count {
+            font-size: 0.85em;
+            color: #666;
+            margin-bottom: 12px;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 1000;
+            overflow-y: auto;
+            padding: 40px 20px;
+        }
+
+        .modal-overlay.active { display: block; }
+
+        .modal {
+            background: #1a1f2e;
+            max-width: 700px;
+            margin: 0 auto;
+            border-radius: 16px;
+            border: 1px solid #2a2f3e;
+            padding: 32px;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .modal-title { font-size: 1.4em; font-weight: 700; }
+        .modal-close {
+            cursor: pointer;
+            font-size: 1.5em;
+            color: #666;
+            background: none;
+            border: none;
+        }
+
+        .modal-close:hover { color: #e0e0e0; }
+
+        .modal-section { margin-bottom: 20px; }
+        .modal-section-title { font-size: 0.85em; color: #888; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px; }
+
+        .modal-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .modal-field { background: #0f1419; padding: 10px 14px; border-radius: 8px; }
+        .modal-field-label { font-size: 0.75em; color: #666; }
+        .modal-field-value { font-size: 0.95em; color: #e0e0e0; margin-top: 2px; }
+
+        .modal-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+
+        @media (max-width: 768px) {
+            .filters { flex-direction: column; }
+            input[type="text"] { width: 100%; }
+            .modal-grid { grid-template-columns: 1fr; }
+            .stats { grid-template-columns: repeat(3, 1fr); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="breadcrumb"><a href="index.html">DAME AI Intel</a> / Voice & Video</div>
+
+        <header>
+            <h1>Voice & Video AI Services</h1>
+            <p class="subtitle">STT, TTS, Image Generation & Video Generation — pricing, streaming support, and capabilities across all providers</p>
+        </header>
+
+        <div class="stats" id="stats-bar">
+            <div class="stat-card"><div class="stat-number" id="stat-total">-</div><div class="stat-label">Total Models</div></div>
+            <div class="stat-card"><div class="stat-number" id="stat-stt">-</div><div class="stat-label">STT Models</div></div>
+            <div class="stat-card"><div class="stat-number" id="stat-tts">-</div><div class="stat-label">TTS Models</div></div>
+            <div class="stat-card"><div class="stat-number" id="stat-image">-</div><div class="stat-label">Image Gen</div></div>
+            <div class="stat-card"><div class="stat-number" id="stat-video">-</div><div class="stat-label">Video Gen</div></div>
+            <div class="stat-card"><div class="stat-number" id="stat-providers">-</div><div class="stat-label">Providers</div></div>
+            <div class="stat-card"><div class="stat-number" id="stat-streaming">-</div><div class="stat-label">With Streaming</div></div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" data-tab="all">All Models</button>
+            <button class="tab" data-tab="stt">Speech-to-Text</button>
+            <button class="tab" data-tab="tts">Text-to-Speech</button>
+            <button class="tab" data-tab="image_generation">Image Gen</button>
+            <button class="tab" data-tab="video_generation">Video Gen</button>
+            <button class="tab" data-tab="providers">By Provider</button>
+            <button class="tab" data-tab="pricing">Pricing Comparison</button>
+        </div>
+
+        <div class="filters">
+            <div class="filter-group">
+                <span class="filter-label">Search</span>
+                <input type="text" id="search" placeholder="Model or provider name...">
+            </div>
+            <div class="filter-group">
+                <span class="filter-label">Provider</span>
+                <select id="filter-provider"><option value="">All Providers</option></select>
+            </div>
+            <div class="filter-group">
+                <span class="filter-label">Source</span>
+                <select id="filter-source">
+                    <option value="">All Sources</option>
+                    <option value="commercial">Commercial APIs</option>
+                    <option value="opensource">Open Source</option>
+                    <option value="aggregator">Aggregators (fal.ai)</option>
+                </select>
+            </div>
+            <div class="toggle-group">
+                <div class="toggle" id="toggle-streaming" data-filter="streaming">Streaming</div>
+                <div class="toggle" id="toggle-realtime" data-filter="realtime">Real-time</div>
+                <div class="toggle" id="toggle-free" data-filter="free">Free Tier</div>
+                <div class="toggle" id="toggle-clone" data-filter="clone">Voice Clone</div>
+            </div>
+        </div>
+
+        <div class="results-count" id="results-count"></div>
+        <div class="table-container" id="table-container">
+            <div class="no-results">Loading data...</div>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal-overlay" id="modal-overlay">
+        <div class="modal" id="modal-content"></div>
+    </div>
+
+    <script>
+        let allModels = [];
+        let currentTab = 'all';
+        let sortColumn = '';
+        let sortDirection = 'desc';
+        let filters = { streaming: false, realtime: false, free: false, clone: false };
+
+        async function loadData() {
+            try {
+                const response = await fetch('data/voice_video_models.json');
+                const data = await response.json();
+                allModels = data.models || [];
+                initializeUI(data.metadata);
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('table-container').innerHTML =
+                    '<div class="no-results">Error loading data. Run <code>./scripts/refresh_voice_video.sh</code> to generate data.</div>';
+            }
+        }
+
+        function initializeUI(metadata) {
+            // Stats
+            document.getElementById('stat-total').textContent = metadata.total_models.toLocaleString();
+            document.getElementById('stat-stt').textContent = (metadata.categories.stt || 0).toLocaleString();
+            document.getElementById('stat-tts').textContent = (metadata.categories.tts || 0).toLocaleString();
+            document.getElementById('stat-image').textContent = (metadata.categories.image_generation || 0).toLocaleString();
+            document.getElementById('stat-video').textContent = (metadata.categories.video_generation || 0).toLocaleString();
+            document.getElementById('stat-providers').textContent = Object.keys(metadata.providers).length;
+            document.getElementById('stat-streaming').textContent = metadata.streaming_support;
+
+            // Populate provider dropdown
+            const provSelect = document.getElementById('filter-provider');
+            const providers = Object.entries(metadata.providers).sort((a, b) => b[1] - a[1]);
+            providers.forEach(([name, count]) => {
+                if (count >= 2) {
+                    const opt = document.createElement('option');
+                    opt.value = name;
+                    opt.textContent = `${name} (${count})`;
+                    provSelect.appendChild(opt);
+                }
+            });
+
+            renderTable();
+        }
+
+        function getFilteredModels() {
+            let models = [...allModels];
+
+            // Tab filter
+            if (currentTab !== 'all' && currentTab !== 'providers' && currentTab !== 'pricing') {
+                models = models.filter(m => m.category === currentTab);
+            }
+
+            // Search
+            const search = document.getElementById('search').value.toLowerCase();
+            if (search) {
+                models = models.filter(m =>
+                    (m.display_name || '').toLowerCase().includes(search) ||
+                    (m.provider || '').toLowerCase().includes(search) ||
+                    (m.model_id || '').toLowerCase().includes(search)
+                );
+            }
+
+            // Provider filter
+            const provider = document.getElementById('filter-provider').value;
+            if (provider) {
+                models = models.filter(m => m.provider === provider);
+            }
+
+            // Source filter
+            const source = document.getElementById('filter-source').value;
+            if (source === 'commercial') {
+                models = models.filter(m => !m.technical?.open_source && m.data_source !== 'fal_api');
+            } else if (source === 'opensource') {
+                models = models.filter(m => m.technical?.open_source);
+            } else if (source === 'aggregator') {
+                models = models.filter(m => m.data_source === 'fal_api');
+            }
+
+            // Toggle filters
+            if (filters.streaming) {
+                models = models.filter(m => m.has_streaming);
+            }
+            if (filters.realtime) {
+                models = models.filter(m => m.has_real_time);
+            }
+            if (filters.free) {
+                models = models.filter(m => m.pricing?.free_tier || m.pricing?.amount === 0);
+            }
+            if (filters.clone) {
+                models = models.filter(m => m.capabilities?.voice_cloning);
+            }
+
+            // Sort
+            if (sortColumn) {
+                models.sort((a, b) => {
+                    let va = getSortValue(a, sortColumn);
+                    let vb = getSortValue(b, sortColumn);
+                    if (va === null || va === undefined) va = sortDirection === 'asc' ? Infinity : -Infinity;
+                    if (vb === null || vb === undefined) vb = sortDirection === 'asc' ? Infinity : -Infinity;
+                    if (typeof va === 'string') return sortDirection === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+                    return sortDirection === 'asc' ? va - vb : vb - va;
+                });
+            }
+
+            return models;
+        }
+
+        function getSortValue(model, col) {
+            switch (col) {
+                case 'name': return model.display_name || '';
+                case 'provider': return model.provider || '';
+                case 'category': return model.category || '';
+                case 'price': return getNormalizedPrice(model);
+                case 'languages': return model.capabilities?.language_count || 0;
+                case 'downloads': return model.popularity?.hf_downloads || 0;
+                default: return null;
+            }
+        }
+
+        function getNormalizedPrice(model) {
+            const p = model.pricing?.normalized || {};
+            return p.per_hour_usd || p.per_million_chars_usd || p.per_image_usd || p.per_second_usd || null;
+        }
+
+        function formatPrice(model) {
+            const p = model.pricing || {};
+            if (p.amount === 0 || p.model === 'open_source') return '<span class="price-free">FREE</span>';
+            const norm = p.normalized || {};
+            if (norm.per_hour_usd) return `<span class="price">$${norm.per_hour_usd.toFixed(3)}/hr</span>`;
+            if (norm.per_million_chars_usd) return `<span class="price">$${norm.per_million_chars_usd.toFixed(1)}/1M chars</span>`;
+            if (norm.per_image_usd) return `<span class="price">$${norm.per_image_usd.toFixed(3)}/image</span>`;
+            if (norm.per_second_usd) return `<span class="price">$${norm.per_second_usd.toFixed(3)}/sec</span>`;
+            if (p.estimated_per_1k_chars) return `<span class="price">~$${p.estimated_per_1k_chars.toFixed(2)}/1K chars</span>`;
+            return '<span style="color:#666">-</span>';
+        }
+
+        function getCategoryBadge(category) {
+            const map = {
+                'stt': '<span class="badge badge-stt">STT</span>',
+                'tts': '<span class="badge badge-tts">TTS</span>',
+                'image_generation': '<span class="badge badge-image">Image</span>',
+                'video_generation': '<span class="badge badge-video">Video</span>',
+                'music_generation': '<span class="badge badge-music">Music</span>',
+            };
+            return map[category] || `<span class="badge">${category}</span>`;
+        }
+
+        function getConnectionBadges(model) {
+            const ct = model.connection_types || {};
+            const badges = [];
+            if (ct.websocket_streaming) badges.push('<span class="conn-badge active">WS</span>');
+            if (ct.rest_streaming || ct.sse) badges.push('<span class="conn-badge active">Stream</span>');
+            if (ct.grpc) badges.push('<span class="conn-badge active">gRPC</span>');
+            if (ct.rest_sync) badges.push('<span class="conn-badge">REST</span>');
+            if (ct.rest_batch) badges.push('<span class="conn-badge">Batch</span>');
+            return badges.join('');
+        }
+
+        function renderTable() {
+            const models = getFilteredModels();
+            document.getElementById('results-count').textContent = `${models.length} models`;
+
+            if (currentTab === 'providers') {
+                renderProvidersView(models);
+                return;
+            }
+
+            if (currentTab === 'pricing') {
+                renderPricingView();
+                return;
+            }
+
+            if (models.length === 0) {
+                document.getElementById('table-container').innerHTML = '<div class="no-results">No models match your filters</div>';
+                return;
+            }
+
+            const displayed = models.slice(0, 200);
+
+            const sortArrow = (col) => sortColumn === col ? `<span class="sort-arrow">${sortDirection === 'asc' ? '↑' : '↓'}</span>` : '';
+            const sortClass = (col) => sortColumn === col ? 'sorted' : '';
+
+            let html = `<table>
+                <thead><tr>
+                    <th class="${sortClass('name')}" onclick="setSort('name')">Model ${sortArrow('name')}</th>
+                    <th class="${sortClass('provider')}" onclick="setSort('provider')">Provider ${sortArrow('provider')}</th>
+                    <th class="${sortClass('category')}" onclick="setSort('category')">Type ${sortArrow('category')}</th>
+                    <th>Connection</th>
+                    <th class="${sortClass('price')}" onclick="setSort('price')">Price ${sortArrow('price')}</th>
+                    <th class="${sortClass('languages')}" onclick="setSort('languages')">Languages ${sortArrow('languages')}</th>
+                    <th>Features</th>
+                </tr></thead><tbody>`;
+
+            for (const m of displayed) {
+                const features = [];
+                if (m.has_streaming) features.push('<span class="badge badge-streaming">Streaming</span>');
+                if (m.capabilities?.voice_cloning) features.push('<span class="badge badge-realtime">Clone</span>');
+                if (m.technical?.open_source) features.push('<span class="badge badge-opensource">OSS</span>');
+                if (m.pricing?.free_tier) features.push('<span class="badge badge-free">Free</span>');
+
+                const langs = m.capabilities?.language_count || '';
+
+                html += `<tr onclick="showModal('${m.model_id}')" style="cursor:pointer">
+                    <td><span class="provider-name">${m.display_name || m.model_id}</span></td>
+                    <td>${m.provider || '-'}</td>
+                    <td>${getCategoryBadge(m.category)}</td>
+                    <td><div class="connection-icons">${getConnectionBadges(m)}</div></td>
+                    <td>${formatPrice(m)}</td>
+                    <td>${langs || '-'}</td>
+                    <td>${features.join(' ')}</td>
+                </tr>`;
+            }
+
+            html += '</tbody></table>';
+            if (models.length > 200) {
+                html += `<div class="no-results" style="padding:20px">Showing 200 of ${models.length} results. Use filters to narrow down.</div>`;
+            }
+
+            document.getElementById('table-container').innerHTML = html;
+        }
+
+        function renderProvidersView(models) {
+            // Group by provider
+            const byProvider = {};
+            allModels.forEach(m => {
+                const p = m.provider || 'Unknown';
+                if (!byProvider[p]) byProvider[p] = { models: [], categories: new Set(), hasStreaming: false, hasFree: false };
+                byProvider[p].models.push(m);
+                byProvider[p].categories.add(m.category);
+                if (m.has_streaming) byProvider[p].hasStreaming = true;
+                if (m.pricing?.free_tier || m.pricing?.amount === 0) byProvider[p].hasFree = true;
+            });
+
+            const providers = Object.entries(byProvider).sort((a, b) => b[1].models.length - a[1].models.length);
+
+            let html = `<table>
+                <thead><tr>
+                    <th>Provider</th>
+                    <th>Models</th>
+                    <th>Categories</th>
+                    <th>Streaming</th>
+                    <th>Free Tier</th>
+                    <th>Signup</th>
+                </tr></thead><tbody>`;
+
+            for (const [name, data] of providers.slice(0, 100)) {
+                const signup = data.models[0]?.provider_info?.signup_url || '';
+                const cats = [...data.categories].map(c => getCategoryBadge(c)).join(' ');
+
+                html += `<tr>
+                    <td><strong>${name}</strong></td>
+                    <td>${data.models.length}</td>
+                    <td>${cats}</td>
+                    <td>${data.hasStreaming ? '<span class="badge badge-streaming">Yes</span>' : '-'}</td>
+                    <td>${data.hasFree ? '<span class="badge badge-free">Yes</span>' : '-'}</td>
+                    <td>${signup ? `<a href="${signup}" target="_blank">Sign up</a>` : '-'}</td>
+                </tr>`;
+            }
+
+            html += '</tbody></table>';
+            document.getElementById('table-container').innerHTML = html;
+        }
+
+        function renderPricingView() {
+            // Show cheapest per category
+            const categories = [
+                { key: 'stt', title: 'Speech-to-Text (cheapest per hour)', priceKey: 'per_hour_usd', unit: '/hr' },
+                { key: 'tts', title: 'Text-to-Speech (cheapest per 1M characters)', priceKey: 'per_million_chars_usd', unit: '/1M chars' },
+                { key: 'image_generation', title: 'Image Generation (cheapest per image)', priceKey: 'per_image_usd', unit: '/image' },
+                { key: 'video_generation', title: 'Video Generation (cheapest per second)', priceKey: 'per_second_usd', unit: '/sec' },
+            ];
+
+            let html = '';
+
+            for (const cat of categories) {
+                const models = allModels
+                    .filter(m => m.category === cat.key && m.pricing?.normalized?.[cat.priceKey])
+                    .sort((a, b) => a.pricing.normalized[cat.priceKey] - b.pricing.normalized[cat.priceKey])
+                    .slice(0, 15);
+
+                if (models.length === 0) continue;
+
+                html += `<h3 style="margin:20px 0 10px; color:#e0e0e0">${cat.title}</h3>`;
+                html += `<table><thead><tr>
+                    <th>Model</th><th>Provider</th><th>Price</th><th>Streaming</th><th>Free Tier</th>
+                </tr></thead><tbody>`;
+
+                for (const m of models) {
+                    const price = m.pricing.normalized[cat.priceKey];
+                    html += `<tr onclick="showModal('${m.model_id}')" style="cursor:pointer">
+                        <td><span class="provider-name">${m.display_name}</span></td>
+                        <td>${m.provider}</td>
+                        <td><span class="price">$${price.toFixed(4)}${cat.unit}</span></td>
+                        <td>${m.has_streaming ? '<span class="badge badge-streaming">Yes</span>' : '-'}</td>
+                        <td>${m.pricing?.free_tier ? '<span class="badge badge-free">Yes</span>' : '-'}</td>
+                    </tr>`;
+                }
+
+                html += '</tbody></table>';
+            }
+
+            if (!html) html = '<div class="no-results">No pricing data available. Run fetch scripts with API keys.</div>';
+            document.getElementById('table-container').innerHTML = html;
+        }
+
+        function showModal(modelId) {
+            const model = allModels.find(m => m.model_id === modelId);
+            if (!model) return;
+
+            const ct = model.connection_types || {};
+            const cap = model.capabilities || {};
+            const pricing = model.pricing || {};
+            const tech = model.technical || {};
+            const info = model.provider_info || {};
+
+            const connectionList = [];
+            if (ct.websocket_streaming) connectionList.push('WebSocket Streaming');
+            if (ct.rest_streaming) connectionList.push('REST Streaming');
+            if (ct.sse) connectionList.push('Server-Sent Events');
+            if (ct.grpc) connectionList.push('gRPC');
+            if (ct.rest_sync) connectionList.push('REST Sync');
+            if (ct.rest_batch) connectionList.push('REST Batch');
+
+            const badges = [];
+            if (model.has_streaming) badges.push('<span class="badge badge-streaming">Streaming</span>');
+            if (model.has_real_time) badges.push('<span class="badge badge-realtime">Real-time</span>');
+            if (cap.voice_cloning) badges.push('<span class="badge badge-realtime">Voice Cloning</span>');
+            if (tech.open_source) badges.push('<span class="badge badge-opensource">Open Source</span>');
+            if (pricing.free_tier) badges.push('<span class="badge badge-free">Free Tier</span>');
+            if (tech.openai_compatible) badges.push('<span class="badge badge-streaming">OpenAI Compatible</span>');
+
+            let html = `
+                <div class="modal-header">
+                    <div class="modal-title">${model.display_name}</div>
+                    <button class="modal-close" onclick="closeModal()">&times;</button>
+                </div>
+                <div class="modal-badges" style="margin-bottom:20px">${getCategoryBadge(model.category)} ${badges.join(' ')}</div>
+
+                <div class="modal-section">
+                    <div class="modal-section-title">Provider</div>
+                    <div class="modal-grid">
+                        <div class="modal-field"><div class="modal-field-label">Provider</div><div class="modal-field-value">${model.provider}</div></div>
+                        <div class="modal-field"><div class="modal-field-label">Model ID</div><div class="modal-field-value" style="font-size:0.8em;word-break:break-all">${model.model_id}</div></div>
+                        ${info.signup_url ? `<div class="modal-field"><div class="modal-field-label">Signup</div><div class="modal-field-value"><a href="${info.signup_url}" target="_blank">${info.signup_url.replace('https://', '')}</a></div></div>` : ''}
+                        ${info.python_sdk ? `<div class="modal-field"><div class="modal-field-label">Python SDK</div><div class="modal-field-value"><code>pip install ${info.python_sdk}</code></div></div>` : ''}
+                    </div>
+                </div>
+
+                <div class="modal-section">
+                    <div class="modal-section-title">Connection Types</div>
+                    <div class="modal-badges">${connectionList.map(c => `<span class="badge badge-streaming">${c}</span>`).join(' ') || '<span style="color:#666">None specified</span>'}</div>
+                </div>
+
+                <div class="modal-section">
+                    <div class="modal-section-title">Pricing</div>
+                    <div class="modal-grid">
+                        <div class="modal-field"><div class="modal-field-label">Price</div><div class="modal-field-value">${formatPrice(model)}</div></div>
+                        <div class="modal-field"><div class="modal-field-label">Free Tier</div><div class="modal-field-value">${pricing.free_tier ? (pricing.free_tier_amount || 'Yes') : 'No'}</div></div>
+                        ${pricing.billing_increment ? `<div class="modal-field"><div class="modal-field-label">Billing</div><div class="modal-field-value">${pricing.billing_increment}</div></div>` : ''}
+                        ${pricing.notes ? `<div class="modal-field"><div class="modal-field-label">Notes</div><div class="modal-field-value" style="font-size:0.85em">${pricing.notes}</div></div>` : ''}
+                    </div>
+                </div>
+
+                <div class="modal-section">
+                    <div class="modal-section-title">Capabilities</div>
+                    <div class="modal-grid">
+                        ${cap.language_count ? `<div class="modal-field"><div class="modal-field-label">Languages</div><div class="modal-field-value">${cap.language_count}</div></div>` : ''}
+                        ${cap.latency_ms ? `<div class="modal-field"><div class="modal-field-label">Latency</div><div class="modal-field-value">${cap.latency_ms}ms</div></div>` : ''}
+                        ${cap.voices_count || cap.voices_available ? `<div class="modal-field"><div class="modal-field-label">Voices</div><div class="modal-field-value">${cap.voices_count || cap.voices_available}</div></div>` : ''}
+                        ${tech.parameters ? `<div class="modal-field"><div class="modal-field-label">Parameters</div><div class="modal-field-value">${(tech.parameters / 1e9).toFixed(1)}B</div></div>` : ''}
+                        ${tech.license ? `<div class="modal-field"><div class="modal-field-label">License</div><div class="modal-field-value">${tech.license}</div></div>` : ''}
+                        ${cap.speed ? `<div class="modal-field"><div class="modal-field-label">Speed</div><div class="modal-field-value">${cap.speed}</div></div>` : ''}
+                    </div>
+                </div>
+
+                ${info.api_base_url ? `<div class="modal-section">
+                    <div class="modal-section-title">API Details</div>
+                    <div class="modal-grid">
+                        <div class="modal-field"><div class="modal-field-label">Base URL</div><div class="modal-field-value" style="font-size:0.85em">${info.api_base_url}</div></div>
+                        ${info.auth_header ? `<div class="modal-field"><div class="modal-field-label">Auth Header</div><div class="modal-field-value"><code>${info.auth_header}</code></div></div>` : ''}
+                        ${info.auth_format ? `<div class="modal-field"><div class="modal-field-label">Auth Format</div><div class="modal-field-value"><code>${info.auth_format}</code></div></div>` : ''}
+                        ${info.docs_url ? `<div class="modal-field"><div class="modal-field-label">Docs</div><div class="modal-field-value"><a href="${info.docs_url}" target="_blank">Documentation</a></div></div>` : ''}
+                    </div>
+                </div>` : ''}
+
+                ${model.popularity?.hf_downloads ? `<div class="modal-section">
+                    <div class="modal-section-title">Popularity</div>
+                    <div class="modal-grid">
+                        <div class="modal-field"><div class="modal-field-label">HuggingFace Downloads</div><div class="modal-field-value">${model.popularity.hf_downloads.toLocaleString()}</div></div>
+                        ${model.popularity.hf_likes ? `<div class="modal-field"><div class="modal-field-label">Likes</div><div class="modal-field-value">${model.popularity.hf_likes.toLocaleString()}</div></div>` : ''}
+                    </div>
+                </div>` : ''}
+            `;
+
+            document.getElementById('modal-content').innerHTML = html;
+            document.getElementById('modal-overlay').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('modal-overlay').classList.remove('active');
+        }
+
+        function setSort(col) {
+            if (sortColumn === col) {
+                sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortColumn = col;
+                sortDirection = col === 'price' ? 'asc' : 'desc';
+            }
+            renderTable();
+        }
+
+        // Event listeners
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                currentTab = tab.dataset.tab;
+                renderTable();
+            });
+        });
+
+        document.getElementById('search').addEventListener('input', renderTable);
+        document.getElementById('filter-provider').addEventListener('change', renderTable);
+        document.getElementById('filter-source').addEventListener('change', renderTable);
+
+        document.querySelectorAll('.toggle').forEach(toggle => {
+            toggle.addEventListener('click', () => {
+                const key = toggle.dataset.filter;
+                filters[key] = !filters[key];
+                toggle.classList.toggle('active');
+                renderTable();
+            });
+        });
+
+        document.getElementById('modal-overlay').addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) closeModal();
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeModal();
+        });
+
+        // Load data
+        loadData();
+    </script>
+</body>
+</html>

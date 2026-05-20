@@ -24,3 +24,33 @@ Thumbs.db
 # Logs
 *.log
 cdk-outputs.json
+
+# CDK build output
+infra/cdk.out/
+
+# Claude Code session files
+.claude/
+
+# Large generated data files (fetched by scripts, not source of truth)
+data/
+
+# Generated runtime reports
+daily_report.json
+daily_report.md
+audio_conversation_models.json
+
+# Separate sub-projects
+agent-test-harness/
+
+# AI-generated analysis reports (not source documentation)
+ADVANCED_FEATURES_REPORT.md
+AGENT_TEST_HARNESS_SPEC.md
+AUDIO_PRICING_GUIDE.md
+DAILY_REPORT_README.md
+DEPLOYMENT_SUMMARY.md
+INTEGRATION_SUMMARY.md
+MODEL_TYPE_FILTER_GUIDE.md
+QUICK_REFERENCE.md
+TEST_MODEL_FILTER.md
+VOICE_VIDEO_RESEARCH.md
+VOICE_VIDEO_SPEC.md
