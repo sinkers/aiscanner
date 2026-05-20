@@ -160,13 +160,21 @@ class PricingStack(Stack):
         bucket.grant_read_write(collector)
 
         # Allow Lambda to read GPU API keys from SSM Parameter Store.
-        # Keys live at /dame/gpu/runpod_api_key and /dame/gpu/vast_api_key.
         collector.add_to_role_policy(
             iam.PolicyStatement(
                 actions=["ssm:GetParameter"],
                 resources=[
                     f"arn:aws:ssm:{self.region}:{self.account}:parameter/dame/gpu/*"
                 ],
+            )
+        )
+
+        # Allow Lambda to fetch AWS EC2 on-demand pricing.
+        # pricing:GetProducts is a global service; the resource must be *.
+        collector.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=["pricing:GetProducts", "pricing:DescribeServices"],
+                resources=["*"],
             )
         )
 

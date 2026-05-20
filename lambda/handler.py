@@ -918,6 +918,232 @@ def _write_provider_rollup(provider_key, gpu_list, today, prefix_fields):
         s3_put_json(s3_key, rollup, cache_seconds=86400)
 
 
+# ---------------------------------------------------------------------------
+# GPU pricing collection — Oracle Cloud Infrastructure
+# ---------------------------------------------------------------------------
+
+OCI_PRICING_URL = "https://apexapps.oracle.com/pls/apex/cetools/api/v1/products/?currencyCode=USD&lang=en"
+
+# Display name → clean GPU name mapping (OCI API has inconsistent naming)
+_OCI_GPU_NAME_MAP = {
+    "L40S":         "L40S",
+    "H100T":        "H100 (Tensor)",
+    "H100":         "H100",
+    "H200":         "H200",
+    "B200":         "B200",
+    "B300":         "B300",
+    "GB200":        "GB200",
+    "GB300":        "GB300",
+    "MI300X":       "AMD MI300X",
+    "MI355X":       "AMD MI355X",
+    "A100":         "A100",
+    "A10":          "A10",
+    "RTX PRO 6000": "RTX Pro 6000",
+    "X7":           "Tesla V100 (X7)",
+    "V2":           "Tesla V100 (V2)",
+    "E3":           "A100 (E3)",
+    "E4":           "A100 (E4)",
+}
+
+
+def _oci_gpu_name(display_name):
+    """Extract clean GPU name from OCI product display name."""
+    for key, name in _OCI_GPU_NAME_MAP.items():
+        if key in display_name:
+            return name
+    # Fallback: strip prefix and clean up
+    cleaned = re.sub(r"^(OCI\s*[-–]\s*|Oracle Cloud Infrastructure\s*[-–]\s*|Compute\s*[-–]\s*|GPU\s*[-–]\s*)+", "", display_name, flags=re.IGNORECASE).strip()
+    return cleaned or display_name
+
+
+def fetch_oracle_gpus():
+    """Fetch OCI GPU pricing — public API, no auth, per GPU per hour."""
+    data = http_get(OCI_PRICING_URL)
+    if not data:
+        return []
+
+    items = data.get("items", [])
+    results = []
+    seen = set()
+
+    for item in items:
+        name = item.get("displayName", "")
+        metric = item.get("metricName", "")
+
+        # Only include GPU compute items priced per-GPU-per-hour
+        if "GPU Per Hour" not in metric:
+            continue
+        # Skip VMware, Cloud@Customer, Roving Edge
+        if any(x in name for x in ("VMware", "Cloud@Customer", "Roving Edge", "Commit")):
+            continue
+
+        gpu_name = _oci_gpu_name(name)
+        if gpu_name in seen:
+            continue
+        seen.add(gpu_name)
+
+        price = None
+        for loc in item.get("currencyCodeLocalizations", []):
+            for p in loc.get("prices", []):
+                if p.get("model") == "PAY_AS_YOU_GO":
+                    price = float(p["value"])
+                    break
+            if price is not None:
+                break
+
+        if price is None:
+            continue
+
+        results.append({
+            "name":        gpu_name,
+            "vram_gb":     0,   # OCI pricing API doesn't expose VRAM
+            "total_offers": 1,
+            "pricing": {
+                "min":        price,
+                "avg":        price,
+                "demand_min": price,
+                "demand_avg": price,
+            },
+        })
+
+    results.sort(key=lambda x: x["name"])
+    print(f"  Oracle Cloud: {len(results)} GPU types")
+    return results
+
+
+# ---------------------------------------------------------------------------
+# GPU pricing collection — AWS EC2 (on-demand, via boto3 Pricing API)
+# ---------------------------------------------------------------------------
+
+# GPU instance families in AWS: p, g, trn (Trainium), inf (Inferentia)
+# We focus on p and g families for actual GPU compute
+_AWS_GPU_FAMILIES = ("p2.", "p3.", "p4.", "p5.", "p6.", "g4.", "g5.", "g6.", "g6e.")
+
+_AWS_INSTANCE_GPU_MAP = {
+    # p2 — Tesla K80
+    "p2.xlarge": ("Tesla K80", 12, 1), "p2.8xlarge": ("Tesla K80", 12, 8), "p2.16xlarge": ("Tesla K80", 12, 16),
+    # p3 — Tesla V100
+    "p3.2xlarge": ("Tesla V100 16GB", 16, 1), "p3.8xlarge": ("Tesla V100 16GB", 16, 4),
+    "p3.16xlarge": ("Tesla V100 16GB", 16, 8), "p3dn.24xlarge": ("Tesla V100 32GB", 32, 8),
+    # p4 — A100
+    "p4d.24xlarge": ("A100 40GB", 40, 8), "p4de.24xlarge": ("A100 80GB", 80, 8),
+    # p5 — H100
+    "p5.48xlarge": ("H100 80GB", 80, 8),
+    # p5e — H200
+    "p5e.48xlarge": ("H200 141GB", 141, 8),
+    # p6 — B200
+    "p6-b200.48xlarge": ("B200 180GB", 180, 8),
+    # g4dn — T4
+    "g4dn.xlarge": ("T4 16GB", 16, 1), "g4dn.2xlarge": ("T4 16GB", 16, 1),
+    "g4dn.4xlarge": ("T4 16GB", 16, 1), "g4dn.8xlarge": ("T4 16GB", 16, 1),
+    "g4dn.12xlarge": ("T4 16GB", 16, 4), "g4dn.16xlarge": ("T4 16GB", 16, 1),
+    "g4dn.metal": ("T4 16GB", 16, 8),
+    # g5 — A10G
+    "g5.xlarge": ("A10G 24GB", 24, 1), "g5.2xlarge": ("A10G 24GB", 24, 1),
+    "g5.4xlarge": ("A10G 24GB", 24, 1), "g5.8xlarge": ("A10G 24GB", 24, 1),
+    "g5.12xlarge": ("A10G 24GB", 24, 4), "g5.16xlarge": ("A10G 24GB", 24, 1),
+    "g5.24xlarge": ("A10G 24GB", 24, 4), "g5.48xlarge": ("A10G 24GB", 24, 8),
+    # g6 — L4
+    "g6.xlarge": ("L4 24GB", 24, 1), "g6.2xlarge": ("L4 24GB", 24, 1),
+    "g6.4xlarge": ("L4 24GB", 24, 1), "g6.8xlarge": ("L4 24GB", 24, 1),
+    "g6.12xlarge": ("L4 24GB", 24, 4), "g6.16xlarge": ("L4 24GB", 24, 1),
+    "g6.24xlarge": ("L4 24GB", 24, 4), "g6.48xlarge": ("L4 24GB", 24, 8),
+    # g6e — L40S
+    "g6e.xlarge": ("L40S 48GB", 48, 1), "g6e.2xlarge": ("L40S 48GB", 48, 1),
+    "g6e.4xlarge": ("L40S 48GB", 48, 1), "g6e.8xlarge": ("L40S 48GB", 48, 1),
+    "g6e.12xlarge": ("L40S 48GB", 48, 4), "g6e.16xlarge": ("L40S 48GB", 48, 1),
+    "g6e.24xlarge": ("L40S 48GB", 48, 4), "g6e.48xlarge": ("L40S 48GB", 48, 8),
+}
+
+
+def fetch_aws_gpus():
+    """
+    Fetch AWS EC2 GPU on-demand pricing via the boto3 Pricing API.
+    Requires pricing:GetProducts permission on the Lambda role.
+    Returns per-GPU hourly price for key GPU instance families.
+    """
+    try:
+        pricing_client = boto3.client("pricing", region_name="us-east-1")
+    except Exception as e:
+        print(f"  AWS pricing client error: {e}")
+        return []
+
+    instance_prices = {}  # instance_type → on-demand $/hr
+    paginator = pricing_client.get_paginator("get_products")
+
+    try:
+        pages = paginator.paginate(
+            ServiceCode="AmazonEC2",
+            Filters=[
+                {"Type": "TERM_MATCH", "Field": "operatingSystem",    "Value": "Linux"},
+                {"Type": "TERM_MATCH", "Field": "tenancy",            "Value": "Shared"},
+                {"Type": "TERM_MATCH", "Field": "preInstalledSw",     "Value": "NA"},
+                {"Type": "TERM_MATCH", "Field": "capacitystatus",     "Value": "Used"},
+                {"Type": "TERM_MATCH", "Field": "location",           "Value": "US East (N. Virginia)"},
+            ],
+        )
+        for page in pages:
+            for price_str in page["PriceList"]:
+                try:
+                    item = json.loads(price_str)
+                    attrs = item.get("product", {}).get("attributes", {})
+                    itype = attrs.get("instanceType", "")
+                    if not any(itype.startswith(f) for f in _AWS_GPU_FAMILIES):
+                        continue
+                    # Extract on-demand USD price
+                    terms = item.get("terms", {}).get("OnDemand", {})
+                    for term in terms.values():
+                        for dim in term.get("priceDimensions", {}).values():
+                            usd = float(dim.get("pricePerUnit", {}).get("USD", 0))
+                            if usd > 0:
+                                instance_prices[itype] = usd
+                except Exception:
+                    continue
+
+    except Exception as e:
+        print(f"  AWS pricing fetch error: {e}")
+        return []
+
+    if not instance_prices:
+        print("  AWS: no GPU pricing returned (check pricing:GetProducts IAM permission)")
+        return []
+
+    # Aggregate per GPU model using the instance map
+    gpu_groups = {}
+    for itype, instance_price in instance_prices.items():
+        gpu_info = _AWS_INSTANCE_GPU_MAP.get(itype)
+        if not gpu_info:
+            continue
+        gpu_name, vram, gpu_count = gpu_info
+        price_per_gpu = instance_price / gpu_count
+
+        if gpu_name not in gpu_groups:
+            gpu_groups[gpu_name] = {"vram_gb": vram, "prices": []}
+        gpu_groups[gpu_name]["prices"].append(price_per_gpu)
+
+    results = []
+    for gpu_name, gdata in gpu_groups.items():
+        prices = gdata["prices"]
+        if not prices:
+            continue
+        results.append({
+            "name":        gpu_name,
+            "vram_gb":     gdata["vram_gb"],
+            "total_offers": len(prices),
+            "pricing": {
+                "min":        min(prices),
+                "avg":        sum(prices) / len(prices),
+                "max":        max(prices),
+                "demand_min": min(prices),
+                "demand_avg": sum(prices) / len(prices),
+            },
+        })
+
+    results.sort(key=lambda x: x["name"])
+    print(f"  AWS: {len(results)} GPU types from {len(instance_prices)} instance prices")
+    return results
+
+
 def update_gpu_rollups(gpu_snapshot, today):
     """Append today's prices to per-GPU history files for all providers."""
 
@@ -1003,16 +1229,26 @@ def update_gpu_rollups(gpu_snapshot, today):
         "demand_avg": "demand_avg",
     })
 
-    rp_count  = len(gpu_snapshot.get("runpod",      {}).get("gpus", []))
-    va_count  = len(gpu_snapshot.get("vast",         {}).get("gpus", []))
-    ll_count  = len(gpu_snapshot.get("lambda_labs",  {}).get("gpus", []))
-    td_count  = len(gpu_snapshot.get("tensordock",   {}).get("gpus", []))
-    vu_count  = len(gpu_snapshot.get("vultr",        {}).get("gpus", []))
-    az_count  = len(gpu_snapshot.get("azure",        {}).get("gpus", []))
-    print(
-        f"GPU rollups updated: RunPod={rp_count} Vast={va_count} "
-        f"LambdaLabs={ll_count} TensorDock={td_count} Vultr={vu_count} Azure={az_count}"
-    )
+    # Oracle Cloud — on-demand only
+    _write_provider_rollup("oracle", gpu_snapshot.get("oracle", {}).get("gpus", []), today, {
+        "demand_min": "demand_min",
+        "demand_avg": "demand_avg",
+    })
+
+    # AWS EC2 — on-demand only (spot not yet implemented)
+    _write_provider_rollup("aws", gpu_snapshot.get("aws", {}).get("gpus", []), today, {
+        "min":        "min",
+        "avg":        "avg",
+        "max":        "max",
+        "demand_min": "demand_min",
+        "demand_avg": "demand_avg",
+    })
+
+    counts = {
+        k: len(gpu_snapshot.get(k, {}).get("gpus", []))
+        for k in ("runpod", "vast", "lambda_labs", "tensordock", "vultr", "azure", "oracle", "aws")
+    }
+    print(f"GPU rollups updated: {counts}")
 
 
 # ---------------------------------------------------------------------------
@@ -1230,6 +1466,8 @@ def handler(event, context):
     tensordock_gpus  = fetch_tensordock_gpus()
     vultr_gpus       = fetch_vultr_gpus()
     azure_gpus       = fetch_azure_gpus()
+    oracle_gpus      = fetch_oracle_gpus()
+    aws_gpus         = fetch_aws_gpus()
 
     # Build snapshot — always write if at least one provider has data
     _provider_results = {
@@ -1239,18 +1477,22 @@ def handler(event, context):
         "tensordock":   tensordock_gpus,
         "vultr":        vultr_gpus,
         "azure":        azure_gpus,
+        "oracle":       oracle_gpus,
+        "aws":          aws_gpus,
     }
     any_data = any(gpus for gpus in _provider_results.values())
 
     if any_data:
         gpu_snapshot = {
             "generated_at": datetime.now(timezone.utc).isoformat(),
-            "runpod":      {"name": "RunPod",       "total_gpus":      len(runpod_gpus),      "gpus": runpod_gpus},
-            "vast":        {"name": "Vast.ai",      "total_gpu_types": len(vast_gpus),        "gpus": vast_gpus},
-            "lambda_labs": {"name": "Lambda Labs",  "total_gpus":      len(lambdalabs_gpus),  "gpus": lambdalabs_gpus},
-            "tensordock":  {"name": "TensorDock",   "total_gpus":      len(tensordock_gpus),  "gpus": tensordock_gpus},
-            "vultr":       {"name": "Vultr",        "total_gpus":      len(vultr_gpus),       "gpus": vultr_gpus},
-            "azure":       {"name": "Azure",        "total_gpu_types": len(azure_gpus),       "gpus": azure_gpus},
+            "runpod":      {"name": "RunPod",        "total_gpus": len(runpod_gpus),      "gpus": runpod_gpus},
+            "vast":        {"name": "Vast.ai",       "total_gpus": len(vast_gpus),        "gpus": vast_gpus},
+            "lambda_labs": {"name": "Lambda Labs",   "total_gpus": len(lambdalabs_gpus),  "gpus": lambdalabs_gpus},
+            "tensordock":  {"name": "TensorDock",    "total_gpus": len(tensordock_gpus),  "gpus": tensordock_gpus},
+            "vultr":       {"name": "Vultr",         "total_gpus": len(vultr_gpus),       "gpus": vultr_gpus},
+            "azure":       {"name": "Azure",         "total_gpus": len(azure_gpus),       "gpus": azure_gpus},
+            "oracle":      {"name": "Oracle Cloud",  "total_gpus": len(oracle_gpus),      "gpus": oracle_gpus},
+            "aws":         {"name": "AWS EC2",       "total_gpus": len(aws_gpus),         "gpus": aws_gpus},
         }
 
         # Carry forward last known data for any provider that returned nothing

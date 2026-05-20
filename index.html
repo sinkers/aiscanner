@@ -231,12 +231,12 @@
                 <div class="stat-label">Models Ranked</div>
             </div>
             <div class="stat-item">
-                <div class="stat-value gpu-stat" id="stat-runpod">–</div>
-                <div class="stat-label">RunPod GPU Types</div>
+                <div class="stat-value gpu-stat" id="stat-gpu-providers">–</div>
+                <div class="stat-label">GPU Providers</div>
             </div>
             <div class="stat-item">
-                <div class="stat-value gpu-stat" id="stat-vast">–</div>
-                <div class="stat-label">Vast.ai GPU Types</div>
+                <div class="stat-value gpu-stat" id="stat-gpu-models">–</div>
+                <div class="stat-label">GPU Models Tracked</div>
             </div>
             <div class="stat-item">
                 <div class="stat-value" id="stat-voice" style="background: linear-gradient(135deg, #f59e0b, #ef4444); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">–</div>
@@ -268,12 +268,12 @@
                 <div class="section-icon">🖥️</div>
                 <div class="section-title">GPU Rental Pricing</div>
                 <div class="section-description">
-                    Compares GPU rental rates across RunPod and Vast.ai — spot pricing, on-demand rates, availability, and price-per-GB efficiency. Find the cheapest GPU for your workload across all cloud providers.
+                    Compares GPU rental rates across 8 providers — RunPod, Vast.ai, Lambda Labs, TensorDock, Vultr, Azure, Oracle Cloud, and AWS EC2. Spot vs on-demand pricing, VRAM filtering, and per-GPU efficiency rankings.
                 </div>
                 <div class="section-features">
-                    <span class="feature-tag">RunPod</span>
-                    <span class="feature-tag">Vast.ai</span>
+                    <span class="feature-tag">8 Providers</span>
                     <span class="feature-tag">Spot &amp; On-Demand</span>
+                    <span class="feature-tag">AWS / Azure / Oracle</span>
                     <span class="feature-tag">Price History</span>
                     <span class="feature-tag">Daily Updates</span>
                 </div>
@@ -343,10 +343,16 @@
                 const r = await fetch('rollups/gpu/latest.json');
                 if (r.ok) {
                     const d = await r.json();
-                    document.getElementById('stat-runpod').textContent =
-                        d.runpod?.total_gpus ?? '–';
-                    document.getElementById('stat-vast').textContent =
-                        d.vast?.total_gpu_types ?? '–';
+                    // Count providers that have at least one GPU
+                    const providerKeys = Object.keys(d).filter(k =>
+                        k !== 'generated_at' && Array.isArray(d[k]?.gpus) && d[k].gpus.length > 0
+                    );
+                    document.getElementById('stat-gpu-providers').textContent = providerKeys.length || '–';
+                    // Count unique GPU model names across all providers
+                    const gpuNames = new Set();
+                    providerKeys.forEach(k => d[k].gpus.forEach(g => gpuNames.add(g.name)));
+                    document.getElementById('stat-gpu-models').textContent =
+                        gpuNames.size > 0 ? gpuNames.size : '–';
                 }
             } catch (_) {}
 
