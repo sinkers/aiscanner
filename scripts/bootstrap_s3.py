@@ -173,7 +173,7 @@ def main():
     if upload_ui:
         print("\nUploading UI files...")
         # Upload HTML files
-        for filename in ["index.html", "llm.html", "gpu.html"]:
+        for filename in ["index.html", "llm.html", "gpu.html", "voice.html"]:
             filepath = os.path.join(base_dir, filename)
             if os.path.exists(filepath):
                 with open(filepath, "rb") as f:
@@ -187,6 +187,14 @@ def main():
                 models_data = json.load(f)
                 put(s3, bucket_name, "openrouter_models.json", models_data,
                     cache_seconds=3600, content_type="application/json")
+
+        # Upload voice/video data file if present (generated locally by scripts/)
+        voice_data_file = os.path.join(base_dir, "data", "voice_video_models.json")
+        if os.path.exists(voice_data_file):
+            with open(voice_data_file, "r") as f:
+                voice_data = json.load(f)
+            put(s3, bucket_name, "data/voice_video_models.json", voice_data,
+                cache_seconds=3600, content_type="application/json")
 
     print(f"\nBootstrap complete.")
     print(f"Bucket: s3://{bucket_name}")
