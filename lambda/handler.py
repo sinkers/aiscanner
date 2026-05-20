@@ -465,54 +465,112 @@ def fetch_runpod_gpus():
 
 
 def fetch_vastai_gpus():
-    """Fetch GPU offers from Vast.ai and aggregate by GPU type."""
-    if not VAST_API_KEY:
-        return []
-    data = http_get(f"{VAST_API_URL}/bundles/?api_key={VAST_API_KEY}")
-    if not isinstance(data, list):
-        print(f"Unexpected Vast.ai response: {type(data)}")
+    """
+    Fetch GPU offers from Vast.ai and aggregate by GPU type.
+
+    Auth is optional — the API returns public listings without a key, but an
+    API key may surface additional/cheaper offers.  We always try with the key
+    first (if set) and fall back to unauthenticated so data is collected even
+    when the key is absent.
+
+    Offers are split by is_bid flag:
+      is_bid=True  → spot / interruptible (can be outbid and evicted)
+      is_bid=False → on-demand / stable  (reserved until you stop it)
+    """
+    url = VAST_API_URL + "/bundles/"
+    if VAST_API_KEY:
+        url += f"?api_key={VAST_API_KEY}"
+
+    raw = http_get(url)
+
+    # API returns {"offers": [...]}; guard against both shapes
+    if isinstance(raw, dict):
+        offers_list = raw.get("offers", [])
+    elif isinstance(raw, list):
+        offers_list = raw
+    else:
+        print(f"Unexpected Vast.ai response type: {type(raw)}")
         return []
 
+    if not offers_list:
+        print("Vast.ai returned no offers")
+        return []
+
+    print(f"  Vast.ai: {len(offers_list)} offers received")
+
     gpu_groups = {}
-    for offer in data:
-        name = offer.get("gpu_name", "Unknown")
+    for offer in offers_list:
+        name = offer.get("gpu_name") or "Unknown"
         if name not in gpu_groups:
             gpu_groups[name] = {
                 "vram_gb": (offer.get("gpu_ram") or 0) / 1024,
-                "offers": [],
+                "spot_offers":   [],   # is_bid=True — interruptible
+                "demand_offers": [],   # is_bid=False — stable on-demand
             }
-        gpu_groups[name]["offers"].append({
-            "id": offer.get("id"),
-            "price_per_hour": offer.get("dph_total"),
-            "rentable": offer.get("rentable", False),
-            "reliability": offer.get("reliability2", 0),
-            "num_gpus": offer.get("num_gpus", 1),
-            "cuda_vers": offer.get("cuda_max_good"),
-            "dlperf": offer.get("dlperf"),
-        })
+
+        price    = offer.get("dph_total")
+        is_bid   = offer.get("is_bid", False)
+        rentable = offer.get("rentable", False)
+        entry = {
+            "id":            offer.get("id"),
+            "price_per_hour": price,
+            "rentable":      rentable,
+            "reliability":   offer.get("reliability2", 0),
+            "num_gpus":      offer.get("num_gpus", 1),
+            "cuda_vers":     offer.get("cuda_max_good"),
+            "dlperf":        offer.get("dlperf"),
+        }
+
+        if is_bid:
+            gpu_groups[name]["spot_offers"].append(entry)
+        else:
+            gpu_groups[name]["demand_offers"].append(entry)
+
+    def _stats(offers):
+        prices = [o["price_per_hour"] for o in offers if o["price_per_hour"]]
+        if not prices:
+            return None, None
+        return min(prices), sum(prices) / len(prices)
 
     results = []
     for gpu_name, gdata in gpu_groups.items():
-        offers = gdata["offers"]
-        rentable = [o for o in offers if o["rentable"]]
-        all_prices = [o["price_per_hour"] for o in offers if o["price_per_hour"]]
-        rent_prices = [o["price_per_hour"] for o in rentable if o["price_per_hour"]]
+        spot    = gdata["spot_offers"]
+        demand  = gdata["demand_offers"]
+        all_off = spot + demand
+
+        spot_min,   spot_avg   = _stats(spot)
+        demand_min, demand_avg = _stats(demand)
+
+        rentable_demand = [o for o in demand if o["rentable"] and o["price_per_hour"]]
+        rent_min, rent_avg = _stats(rentable_demand)
+
+        all_prices = [o["price_per_hour"] for o in all_off if o["price_per_hour"]]
         if not all_prices:
             continue
+
+        pricing = {
+            "min": min(all_prices),
+            "max": max(all_prices),
+            "avg": sum(all_prices) / len(all_prices),
+        }
+        if spot_min   is not None: pricing["spot_min"]   = spot_min
+        if spot_avg   is not None: pricing["spot_avg"]   = spot_avg
+        if demand_min is not None: pricing["demand_min"] = demand_min
+        if demand_avg is not None: pricing["demand_avg"] = demand_avg
+        if rent_min   is not None: pricing["rentable_min"] = rent_min
+        if rent_avg   is not None: pricing["rentable_avg"] = rent_avg
+
         results.append({
-            "name": gpu_name,
-            "vram_gb": gdata["vram_gb"],
-            "total_offers": len(offers),
-            "rentable_offers": len(rentable),
-            "pricing": {
-                "min": min(all_prices),
-                "max": max(all_prices),
-                "avg": sum(all_prices) / len(all_prices),
-                "rentable_min": min(rent_prices) if rent_prices else None,
-                "rentable_avg": sum(rent_prices) / len(rent_prices) if rent_prices else None,
-            },
-            "sample_offers": rentable[:5],
+            "name":            gpu_name,
+            "vram_gb":         gdata["vram_gb"],
+            "total_offers":    len(all_off),
+            "spot_offers":     len(spot),
+            "demand_offers":   len(demand),
+            "rentable_offers": len(rentable_demand),
+            "pricing":         pricing,
+            "sample_offers":   (rentable_demand or all_off)[:5],
         })
+
     results.sort(key=lambda x: x["name"])
     return results
 
@@ -552,12 +610,17 @@ def update_gpu_rollups(gpu_snapshot, today):
         p = gpu.get("pricing", {})
         # If there was already a runpod entry today, merge both into a combined record
         combined = existing_today[0] if existing_today else {"date": today}
-        combined.update({
+        combined.update({field: val for field, val in {
             "vast_min":             p.get("min"),
+            "vast_max":             p.get("max"),
             "vast_avg":             p.get("avg"),
+            "vast_spot_min":        p.get("spot_min"),
+            "vast_spot_avg":        p.get("spot_avg"),
+            "vast_demand_min":      p.get("demand_min"),
+            "vast_demand_avg":      p.get("demand_avg"),
             "vast_rentable_min":    p.get("rentable_min"),
             "vast_rentable_offers": gpu.get("rentable_offers"),
-        })
+        }.items() if val is not None})
         rollup["history"].append(combined)
         rollup["history"].sort(key=lambda x: x["date"])
         s3_put_json(key, rollup, cache_seconds=86400)

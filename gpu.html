@@ -345,20 +345,30 @@
 
     // Map each raw API field to its tier and a human label
     const FIELD_DEFS = [
+        // ── RunPod ─────────────────────────────────────────────────────────
         // spot / interruptible
-        { field: 'community_spot',      tier: 'spot',     label: 'Community Spot'         },
-        { field: 'secure_spot',         tier: 'spot',     label: 'Secure Spot'            },
-        { field: 'minimum_bid',         tier: 'spot',     label: 'Minimum Bid'            },
-        { field: 'rentable_min',        tier: 'spot',     label: 'Rentable Min (Vast)'    },
-        { field: 'min',                 tier: 'spot',     label: 'Market Min (Vast)'      },
+        { field: 'community_spot',      tier: 'spot',     label: 'Community Spot (RunPod)'      },
+        { field: 'secure_spot',         tier: 'spot',     label: 'Secure Spot (RunPod)'         },
+        { field: 'minimum_bid',         tier: 'spot',     label: 'Minimum Bid (RunPod)'         },
         // on-demand / stable
-        { field: 'community_on_demand', tier: 'demand',   label: 'Community On-Demand'    },
-        { field: 'secure_on_demand',    tier: 'demand',   label: 'Secure On-Demand'       },
-        { field: 'avg',                 tier: 'demand',   label: 'Market Avg (Vast)'      },
-        { field: 'rentable_avg',        tier: 'demand',   label: 'Rentable Avg (Vast)'    },
+        { field: 'community_on_demand', tier: 'demand',   label: 'Community On-Demand (RunPod)' },
+        { field: 'secure_on_demand',    tier: 'demand',   label: 'Secure On-Demand (RunPod)'    },
         // reserved / always-on
-        { field: 'uninterruptable',     tier: 'reserved', label: 'Uninterruptable'        },
-        { field: 'max',                 tier: 'reserved', label: 'Market Max (Vast)'      },
+        { field: 'uninterruptable',     tier: 'reserved', label: 'Uninterruptable (RunPod)'     },
+
+        // ── Vast.ai ────────────────────────────────────────────────────────
+        // spot / bid-based (is_bid=true — can be outbid and evicted)
+        { field: 'spot_min',            tier: 'spot',     label: 'Spot Min (Vast)'              },
+        { field: 'spot_avg',            tier: 'spot',     label: 'Spot Avg (Vast)'              },
+        { field: 'rentable_min',        tier: 'spot',     label: 'Rentable Min (Vast)'          },
+        // on-demand / stable (is_bid=false)
+        { field: 'demand_min',          tier: 'demand',   label: 'On-Demand Min (Vast)'         },
+        { field: 'demand_avg',          tier: 'demand',   label: 'On-Demand Avg (Vast)'         },
+        { field: 'rentable_avg',        tier: 'demand',   label: 'Rentable Avg (Vast)'          },
+        // overall market range (both bid and non-bid)
+        { field: 'min',                 tier: 'spot',     label: 'Market Min (Vast)'            },
+        { field: 'avg',                 tier: 'demand',   label: 'Market Avg (Vast)'            },
+        { field: 'max',                 tier: 'reserved', label: 'Market Max (Vast)'            },
     ];
 
     // Returns array of { field, label, price, tier } for all non-null prices
@@ -859,20 +869,22 @@
 
             // Map history field names to readable labels (mirrors FIELD_DEFS + history-specific keys)
             const HIST_LABELS = {
-                community_spot:      'Community Spot',
-                secure_spot:         'Secure Spot',
-                community_on_demand: 'Community OD',
-                secure_on_demand:    'Secure OD',
-                uninterruptable:     'Reserved',
-                vast_min:            'Vast Min',
-                vast_avg:            'Vast Avg',
-                vast_rentable_min:   'Vast Rentable Min',
-                vast_rentable_offers:'Vast Rentable Offers',
-                min:                 'Market Min',
-                avg:                 'Market Avg',
-                max:                 'Market Max',
-                rentable_min:        'Rentable Min',
-                rentable_avg:        'Rentable Avg',
+                // RunPod
+                community_spot:       'Spot (Community)',
+                secure_spot:          'Spot (Secure)',
+                community_on_demand:  'On-Demand (Community)',
+                secure_on_demand:     'On-Demand (Secure)',
+                uninterruptable:      'Reserved',
+                // Vast.ai — new split fields
+                vast_spot_min:        'Spot Min (Vast)',
+                vast_spot_avg:        'Spot Avg (Vast)',
+                vast_demand_min:      'On-Demand Min (Vast)',
+                vast_demand_avg:      'On-Demand Avg (Vast)',
+                vast_rentable_min:    'Rentable Min (Vast)',
+                // Vast.ai — legacy overall market fields
+                vast_min:             'Market Min (Vast)',
+                vast_max:             'Market Max (Vast)',
+                vast_avg:             'Market Avg (Vast)',
             };
 
             const numericKeys = data.history.length > 0
