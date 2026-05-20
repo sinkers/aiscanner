@@ -41,17 +41,14 @@ ui:
 seed:
 	python3 scripts/bootstrap_s3.py "$(bucket)" --upload-ui
 
-## Manually trigger the Lambda and tail logs
+## Trigger the Lambda asynchronously (fire-and-forget; check logs in CloudWatch)
 invoke:
 	aws lambda invoke \
 		--function-name "$(lambda_fn)" \
-		--log-type Tail \
-		--query 'LogResult' \
-		--output text \
-		/tmp/pricing-invoke-out.json \
-	| base64 -d
-	@echo "--- response ---"
-	@cat /tmp/pricing-invoke-out.json
+		--invocation-type Event \
+		/tmp/pricing-invoke-out.json
+	@echo "Lambda triggered (async). Check progress:"
+	@echo "  aws logs tail /aws/lambda/$(lambda_fn) --follow"
 
 ## Store GPU rental API keys in SSM Parameter Store (run once after deploy)
 ## Usage: RUNPOD_API_KEY=sk-... VAST_API_KEY=... make configure-gpu
