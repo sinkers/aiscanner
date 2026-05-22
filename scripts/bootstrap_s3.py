@@ -181,11 +181,12 @@ def main():
                         cache_seconds=300, content_type="text/html; charset=utf-8")
 
         # Upload models data (required for model type filter)
+        # Uploaded to data/openrouter_models.json to match the path llm.html fetches
         models_file = os.path.join(base_dir, "data", "openrouter_models.json")
         if os.path.exists(models_file):
             with open(models_file, "r") as f:
                 models_data = json.load(f)
-                put(s3, bucket_name, "openrouter_models.json", models_data,
+                put(s3, bucket_name, "data/openrouter_models.json", models_data,
                     cache_seconds=3600, content_type="application/json")
 
         # Upload voice/video data file if present (generated locally by scripts/)

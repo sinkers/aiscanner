@@ -648,6 +648,45 @@
 
         .cheapest-price { color: #4ade80; font-weight: 600; }
 
+        /* Comparison controls toolbar */
+        .comparison-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .comparison-controls input[type="text"],
+        .comparison-controls input[type="number"],
+        .comparison-controls select {
+            background: #1a1f2e;
+            border: 1px solid #2a2f3e;
+            border-radius: 8px;
+            color: #e0e0e0;
+            padding: 7px 12px;
+            font-size: 0.9em;
+            outline: none;
+        }
+        .comparison-controls input[type="text"]:focus,
+        .comparison-controls input[type="number"]:focus,
+        .comparison-controls select:focus {
+            border-color: #667eea;
+        }
+        .comparison-controls input[type="text"]  { flex: 1; min-width: 160px; max-width: 360px; }
+        .comparison-controls input[type="number"] { width: 100px; }
+        .comparison-controls select               { min-width: 170px; cursor: pointer; }
+        .comparison-controls .ctrl-label {
+            color: #6a6a6a;
+            font-size: 0.82em;
+            white-space: nowrap;
+        }
+        .comparison-controls .ctrl-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+
         /* ── Site nav ── */
         .site-nav {
             display: flex;
@@ -929,6 +968,7 @@
     <script>
         let infraData = null;
         let benchmarkData = null;
+        let _comparisonModels = [];   // all models with 2+ providers, built in renderComparisonsView
         let benchmarkMap = {};   // lowercase id -> benchmark entry
         let _benchmarkLoaded = false;
         let modelsArchitecture = {}; // model_id -> architecture data
@@ -945,7 +985,7 @@
 
         // Load data — tries hosted rollup first, falls back to local file
         async function loadData() {
-            const sources = ['rollups/latest.json', 'infrastructure_provider_map.json'];
+            const sources = ['rollups/latest.json', 'data/infrastructure_provider_map.json'];  // data/ served by local dev server and S3
             for (const src of sources) {
                 try {
                     const response = await fetch(src);
@@ -961,13 +1001,13 @@
             }
             console.error('Could not load data from any source');
             document.getElementById('providers-table-container').innerHTML =
-                '<div class="no-results">Error loading data. Make sure infrastructure_provider_map.json exists in the same directory.<br><br>If opening directly as a file, use index_standalone.html instead or run a web server.</div>';
+                '<div class="no-results">Error loading data. Run <code>make map-infra</code> to generate data/infrastructure_provider_map.json, then serve with <code>make serve</code>.</div>';
         }
 
         async function loadModelArchitectures() {
             try {
                 console.log('Fetching model architectures...');
-                const response = await fetch('openrouter_models.json');
+                const response = await fetch('data/openrouter_models.json');
                 if (!response.ok) {
                     console.warn('Model architectures fetch failed:', response.status);
                     return;
@@ -1961,7 +2001,7 @@
             // Use filteredProviders if filters are active, otherwise all providers
             const providers = filteredProviders.length > 0 ? filteredProviders : Object.entries(infraData.providers);
 
-            // Build model -> providers map from the flat provider data
+            // Build model -> providers map
             const modelMap = {};
             providers.forEach(([providerName, providerData]) => {
                 providerData.models.forEach(model => {
@@ -1984,24 +2024,45 @@
                 });
             });
 
-            const multiProvider = Object.values(modelMap)
+            // Compute per-model stats and store globally for re-filtering / re-sorting
+            _comparisonModels = Object.values(modelMap)
                 .filter(m => m.providers.length > 1)
-                .sort((a, b) => b.providers.length - a.providers.length);
-
-            const rows = multiProvider.map(m => buildComparisonCard(m)).join('');
+                .map(m => {
+                    const prices = m.providers.map(p => p.totalPrice).sort((a, b) => a - b);
+                    m.minPrice = prices[0];
+                    m.maxPrice = prices[prices.length - 1];
+                    m.spread   = m.minPrice > 0 ? (m.maxPrice - m.minPrice) / m.minPrice * 100 : 0;
+                    return m;
+                });
 
             document.getElementById('comparisons-container').innerHTML = `
-                <div style="margin-bottom:20px; display:flex; gap:15px; align-items:center; flex-wrap:wrap;">
+                <div class="comparison-controls">
                     <input type="text" id="comparison-search"
-                           placeholder="Filter models..."
-                           style="flex:1; max-width:400px;"
-                           oninput="filterComparisons(this.value)">
-                    <span id="comparison-count" style="color:#a0a0a0; font-size:0.9em; white-space:nowrap;">
-                        ${multiProvider.length} models available from 2+ providers
-                    </span>
+                           placeholder="Filter by model name..."
+                           oninput="applyComparisonFilters()">
+                    <div class="ctrl-group">
+                        <span class="ctrl-label">Price $/1M</span>
+                        <input type="number" id="cmp-price-min" placeholder="min"
+                               min="0" step="0.01" oninput="applyComparisonFilters()">
+                        <span class="ctrl-label">–</span>
+                        <input type="number" id="cmp-price-max" placeholder="max"
+                               min="0" step="0.01" oninput="applyComparisonFilters()">
+                    </div>
+                    <div class="ctrl-group">
+                        <select id="cmp-sort" onchange="applyComparisonFilters()">
+                            <option value="providers">Sort: most providers</option>
+                            <option value="cheapest">Sort: cheapest first</option>
+                            <option value="expensive">Sort: most expensive</option>
+                            <option value="spread">Sort: highest spread</option>
+                            <option value="alpha">Sort: A → Z</option>
+                        </select>
+                    </div>
+                    <span id="comparison-count" style="color:#6a6a6a; font-size:0.85em; white-space:nowrap; margin-left:auto;"></span>
                 </div>
-                <div id="comparison-list">${rows}</div>
+                <div id="comparison-list"></div>
             `;
+
+            applyComparisonFilters();
         }
 
         function buildComparisonCard(modelData) {
@@ -2169,17 +2230,44 @@
             }
         }
 
-        function filterComparisons(query) {
-            const q = query.toLowerCase();
-            let visible = 0;
-            document.querySelectorAll('#comparison-list .comparison-model-card').forEach(card => {
-                const match = !q || card.dataset.modelId.toLowerCase().includes(q);
-                card.style.display = match ? '' : 'none';
-                if (match) visible++;
+        function applyComparisonFilters() {
+            const query    = (document.getElementById('comparison-search')?.value || '').toLowerCase();
+            const minInput = parseFloat(document.getElementById('cmp-price-min')?.value);
+            const maxInput = parseFloat(document.getElementById('cmp-price-max')?.value);
+            const sortBy   = document.getElementById('cmp-sort')?.value || 'providers';
+
+            // Filter
+            let results = _comparisonModels.filter(m => {
+                if (query && !m.modelId.toLowerCase().includes(query) &&
+                             !(m.modelName || '').toLowerCase().includes(query)) return false;
+                // price range is in $/1M tokens; minPrice is stored per-token
+                const cheapestPerM = m.minPrice * 1e6;
+                if (!isNaN(minInput) && cheapestPerM < minInput) return false;
+                if (!isNaN(maxInput) && cheapestPerM > maxInput) return false;
+                return true;
             });
+
+            // Sort
+            const sorters = {
+                providers: (a, b) => b.providers.length - a.providers.length || a.modelId.localeCompare(b.modelId),
+                cheapest:  (a, b) => a.minPrice - b.minPrice,
+                expensive: (a, b) => b.minPrice - a.minPrice,
+                spread:    (a, b) => b.spread - a.spread,
+                alpha:     (a, b) => (a.modelName || a.modelId).localeCompare(b.modelName || b.modelId),
+            };
+            results.sort(sorters[sortBy] || sorters.providers);
+
+            // Render
+            document.getElementById('comparison-list').innerHTML =
+                results.length ? results.map(m => buildComparisonCard(m)).join('') :
+                '<div style="text-align:center; color:#6a6a6a; padding:40px 20px;">No models match the current filters.</div>';
+
             const el = document.getElementById('comparison-count');
-            if (el) el.textContent = `${visible} models available from 2+ providers`;
+            if (el) el.textContent = `${results.length} of ${_comparisonModels.length} models`;
         }
+
+        // Keep as alias so any old callers still work
+        function filterComparisons(query) { applyComparisonFilters(); }
 
         // ----------------------------------------------------------------
         // Benchmark Rankings
