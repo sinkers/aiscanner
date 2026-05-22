@@ -4,62 +4,119 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-OpenRouter Infrastructure Provider Mapper - maps ALL 67 infrastructure providers hosting models on OpenRouter, showing who hosts what, where they are, pricing, and real-time performance metrics.
+OpenRouter Infrastructure Provider Mapper — maps infrastructure providers hosting models on OpenRouter, showing who hosts what, where they are, pricing, and real-time performance metrics.
 
 **Critical Distinction**: OpenRouter has TWO types of "providers":
-1. **Model Creator** - Company that trained the model (e.g., `anthropic` in `anthropic/claude-3.5-sonnet`)
-2. **Infrastructure Provider** - Company that hosts/serves the model (e.g., Azure, AWS Bedrock, DeepInfra)
+1. **Model Creator** — Company that trained the model (e.g., `anthropic` in `anthropic/claude-3.5-sonnet`)
+2. **Infrastructure Provider** — Company that hosts/serves the model (e.g., Azure, AWS Bedrock, DeepInfra)
 
 This project focuses on #2 (infrastructure providers). One model can be hosted by multiple infrastructure providers with different pricing and performance.
 
+## Directory Structure
+
+```
+llm-providers/
+├── README.md               # Project overview (only doc at root)
+├── CLAUDE.md               # This file
+├── Makefile                # All common tasks (run `make help`)
+├── requirements.txt        # Python dependencies
+├── .env                    # Secrets (gitignored)
+│
+├── src/llm_providers/      # Python package (PYTHONPATH=src)
+│   ├── config.py           # Central config: API token, all data paths
+│   ├── openrouter/
+│   │   ├── fetch.py        # Fetch models + providers from API
+│   │   ├── map_infrastructure.py  # Map infrastructure providers
+│   │   └── integrate_research.py # Merge seed research into map
+│   ├── reports/
+│   │   └── daily_report.py # Generate daily markdown + JSON report
+│   └── cli/
+│       ├── serve.py        # Local dev server (serves from repo root)
+│       ├── view_map.py     # Query infrastructure map
+│       ├── view_report.py  # Query daily report
+│       └── view_audio.py   # Audio model pricing viewer
+│
+├── webapp/                 # Web UI
+│   ├── index.html          # Main dashboard
+│   ├── llm.html            # LLM models view
+│   ├── voice.html          # Voice/Video services
+│   ├── gpu.html            # GPU rental pricing
+│   └── fix_pricing.js      # Pricing data helper
+│
+├── data/                   # All data files (gitignored except seeds/)
+│   ├── seeds/              # Hand-curated data (committed to git)
+│   │   └── provider_research.json
+│   ├── openrouter_models.json
+│   ├── openrouter_providers.json
+│   ├── infrastructure_provider_map.json
+│   ├── daily_report.json
+│   └── daily_report.md
+│
+├── deploy/                 # Deploy scripts
+│   ├── deploy.sh           # Full deploy (calls make deploy)
+│   └── refresh_all_data.sh # Refresh all data locally
+│
+├── docs/                   # Documentation
+│   ├── quick-start.md
+│   ├── data-sources.md
+│   ├── web-ui-guide.md
+│   └── pricing-guide.md
+│
+├── scripts/                # S3/utility scripts
+│   ├── bootstrap_s3.py     # Seed S3 with initial data
+│   ├── rebuild_history.py  # Rebuild S3 rollup history
+│   ├── fetch_benchmarks.py
+│   ├── fetch_huggingface_models.py
+│   ├── fetch_voice_providers.py
+│   ├── fetch_fal_models.py
+│   ├── merge_voice_video_data.py
+│   └── refresh_voice_video.sh
+│
+├── lambda/                 # AWS Lambda handler (CDK-managed)
+│   └── handler.py
+│
+└── infra/                  # AWS CDK infrastructure
+    ├── app.py
+    └── stack.py
+```
+
 ## Architecture
 
-### Data Pipeline (4 stages)
+### Data Pipeline (4 stages, all run via `make`)
 
 ```
-1. FETCH (fetch_openrouter.py)
-   ├─ GET /api/v1/models → openrouter_models.json
-   ├─ GET /api/v1/providers → openrouter_providers.json
-   └─ Groups by model creator (NOT infrastructure)
+1. FETCH  (make fetch-openrouter)
+   └─ src/llm_providers/openrouter/fetch.py
+      ├─ GET /api/v1/models → data/openrouter_models.json
+      └─ GET /api/v1/providers → data/openrouter_providers.json
 
-2. MAP (map_infrastructure_providers.py) ⭐ Core Script
-   ├─ For each of 368 models:
-   │  └─ GET /api/v1/models/{model_id}/endpoints
-   │     └─ Returns infrastructure providers hosting that model
-   ├─ Aggregates pricing, performance, location per provider
-   ├─ Progress tracking (resumes if interrupted)
-   └─ Output: infrastructure_provider_map.json (1.1MB)
+2. MAP    (make map-infra)   ⭐ Core stage
+   └─ src/llm_providers/openrouter/map_infrastructure.py
+      ├─ For each model: GET /api/v1/models/{id}/endpoints
+      ├─ Aggregates pricing, performance, location per provider
+      ├─ Progress checkpoint: data/mapping_progress.json (resumes if interrupted)
+      └─ Output: data/infrastructure_provider_map.json
 
-3. ENRICH (integrate_research.py)
-   ├─ Reads: provider_research.json (web research results)
-   ├─ Merges: homepage, contact_email, support_url, city, description
-   └─ Updates: infrastructure_provider_map.json
+3. ENRICH (make integrate-research)
+   └─ src/llm_providers/openrouter/integrate_research.py
+      ├─ Reads: data/seeds/provider_research.json (hand-curated)
+      └─ Merges: homepage, contact_email, support_url, city, description
 
-4. REPORT (generate_daily_report.py) ⭐ New Daily Report
-   ├─ Analyzes all models for advanced features:
-   │  ├─ TTS (Text-to-Speech)
-   │  ├─ STT (Speech-to-Text)
-   │  ├─ Video input
-   │  ├─ Image generation
-   │  └─ Multimodal capabilities
-   ├─ Tracks pricing trends per feature
-   ├─ Ranks providers by feature support
-   └─ Outputs: daily_report.md + daily_report.json
+4. REPORT (make generate-report)
+   └─ src/llm_providers/reports/daily_report.py
+      ├─ Tracks TTS, STT, video, image generation features
+      ├─ Outputs: data/daily_report.md + data/daily_report.json
+      └─ Run 'make refresh-all' to execute all 4 stages
 ```
 
-### Web UI (2 versions)
+### Web UI
 
 ```
-index.html
-├─ Loads infrastructure_provider_map.json via fetch()
-├─ Requires web server (CORS restrictions)
-└─ Run: python3 serve.py or python3 -m http.server 8000
-
-index_standalone.html
-├─ Data embedded directly in HTML (no fetch)
-├─ Can open as file:// URL (no server needed)
-└─ Generated by embedding JSON into index.html
+webapp/index.html     — Main dashboard (requires web server for CORS)
+webapp/index_standalone.html — Embedded JSON version (gitignored, regenerate as needed)
 ```
+
+Run locally: `make serve` → http://localhost:8000/webapp/
 
 ## Critical Technical Details
 
@@ -67,9 +124,8 @@ index_standalone.html
 
 **WRONG** (causes 404s):
 ```python
-model_id = "openai/gpt-4"
 encoded = model_id.replace('/', '%2F')  # openai%2Fgpt-4
-url = f"/api/v1/models/{encoded}/endpoints"  # ❌ Fails
+url = f"/api/v1/models/{encoded}/endpoints"  # ❌
 ```
 
 **CORRECT**:
@@ -77,437 +133,85 @@ url = f"/api/v1/models/{encoded}/endpoints"  # ❌ Fails
 url = f"/api/v1/models/{model_id}/endpoints"  # ✅ Raw ID in path
 ```
 
-The OpenRouter API expects raw model IDs with unencoded slashes.
-
 ### Pricing Display Conversion
 
-**Storage format** (JSON): Dollars per token
+**Storage** (JSON): Dollars per token
 ```json
 {"prompt": "0.0000004", "completion": "0.0000006"}
 ```
+**Display** (UI): Dollars per 1M tokens — multiply stored value by 1,000,000.
 
-**Display format** (UI): Dollars per 1M tokens
-```javascript
-displayPrice = (storedPrice * 1_000_000).toFixed(4)
-// 0.0000004 → 0.4000 (per 1M tokens)
+### Data Paths
+
+All paths are defined in `src/llm_providers/config.py`. Never hardcode paths in modules — use `config.INFRA_MAP_FILE`, `config.MODELS_FILE`, etc.
+
+### Running the Package
+
+```bash
+export PYTHONPATH=src   # or use make targets which set this automatically
+python3 -m llm_providers.openrouter.fetch
 ```
-
-Industry standard is per-million tokens. Always multiply by 1,000,000 for display.
-
-### Standalone HTML Generation
-
-Don't manually edit `index_standalone.html`. Always regenerate it after updating `infrastructure_provider_map.json`:
-
-```python
-import json
-import re
-
-with open('infrastructure_provider_map.json') as f:
-    data = json.load(f)
-
-with open('index.html') as f:
-    html = f.read()
-
-# Replace the entire loadData function's fetch logic with embedded data
-html = html.replace(
-    '''async function loadData() {
-            try {
-                const response = await fetch('infrastructure_provider_map.json');
-                infraData = await response.json();
-                initializeUI();
-            } catch (error) {
-                console.error('Error loading data:', error);
-                document.getElementById('providers-table-container').innerHTML =
-                    '<div class="no-results">Error loading data. Make sure infrastructure_provider_map.json exists in the same directory.<br><br>If opening directly as a file, use index_standalone.html instead or run a web server.</div>';
-            }
-        }''',
-    '''async function loadData() {
-            // Data embedded in standalone version
-            infraData = ''' + json.dumps(data) + ''';
-            initializeUI();
-        }'''
-)
-
-with open('index_standalone.html', 'w') as f:
-    f.write(html)
-```
-
-**Critical**: The replacement must match the exact structure in `index.html` including the try/catch block. The standalone version embeds ~780KB of JSON directly in the HTML.
 
 ## Common Commands
 
-### Generate Daily Report (Quickest)
 ```bash
-# Just generate the daily report from existing data
-python3 generate_daily_report.py
+make help                  # List all targets
 
-# View the report
-python3 view_daily_report.py summary
-python3 view_daily_report.py audio-providers
-python3 view_daily_report.py pricing
+# Full local data refresh
+make refresh-all           # fetch → map → enrich → report
+
+# Individual stages
+make fetch-openrouter      # Fetch models + providers from API
+make map-infra             # Map infrastructure providers (~2 min)
+make integrate-research    # Merge seed research data
+make generate-report       # Generate daily report
+
+# Query data locally
+make view-map              # Interactive map viewer
+make view-report           # Interactive report viewer
+
+# Local dev server
+make serve                 # http://localhost:8000/webapp/
+
+# Deploy
+make deploy                # Full CDK deploy + S3 seed
+make ui                    # Upload webapp HTML to S3 only
+make seed                  # Upload data + UI to S3
+make invoke                # Trigger Lambda (collect fresh data)
+
+# GPU pricing API keys
+make configure-gpu-env     # Load GPU keys from .env into SSM
 ```
-
-### Refresh All Data (Full Pipeline)
-```bash
-# Option A: Run refresh script (recommended)
-./refresh_all_data.sh
-
-# Option B: Manual step-by-step
-# 1. Fetch base data (optional, rarely changes)
-python3 fetch_openrouter.py
-
-# 2. Map infrastructure (required, ~2 minutes)
-python3 map_infrastructure_providers.py
-
-# 3. Integrate research (if you have provider_research.json)
-python3 integrate_research.py
-
-# 4. Generate daily report with advanced features
-python3 generate_daily_report.py
-
-# 5. Regenerate standalone HTML
-python3 << 'EOF'
-import json
-with open('infrastructure_provider_map.json') as f:
-    data = json.load(f)
-with open('index.html') as f:
-    html = f.read()
-
-# Replace the entire loadData function - must match exact structure
-html = html.replace(
-    '''async function loadData() {
-            try {
-                const response = await fetch('infrastructure_provider_map.json');
-                infraData = await response.json();
-                initializeUI();
-            } catch (error) {
-                console.error('Error loading data:', error);
-                document.getElementById('providers-table-container').innerHTML =
-                    '<div class="no-results">Error loading data. Make sure infrastructure_provider_map.json exists in the same directory.<br><br>If opening directly as a file, use index_standalone.html instead or run a web server.</div>';
-            }
-        }''',
-    '''async function loadData() {
-            // Data embedded in standalone version
-            infraData = ''' + json.dumps(data) + ''';
-            initializeUI();
-        }'''
-)
-
-with open('index_standalone.html', 'w') as f:
-    f.write(html)
-print(f"✅ Generated index_standalone.html ({len(html):,} bytes)")
-EOF
-```
-
-### Query Data
-
-#### Daily Report (Advanced Features)
-```bash
-# Overall summary
-python3 view_daily_report.py summary
-
-# Feature-specific details
-python3 view_daily_report.py feature stt-tts        # Full voice conversation
-python3 view_daily_report.py feature stt            # Speech to text
-python3 view_daily_report.py feature video          # Video input
-python3 view_daily_report.py feature image          # Image generation
-
-# Provider rankings
-python3 view_daily_report.py providers 20           # Top 20 providers
-python3 view_daily_report.py audio-providers        # Audio-specific providers
-
-# Pricing comparison
-python3 view_daily_report.py pricing
-
-# Export data
-python3 view_daily_report.py export stt-tts audio_models.json
-```
-
-#### Infrastructure Data
-```bash
-# View all providers
-python3 view_infrastructure_map.py list
-
-# Provider details
-python3 view_infrastructure_map.py provider "DeepInfra"
-
-# Compare providers for a model
-python3 view_infrastructure_map.py model "meta-llama/llama-3.1-70b-instruct"
-
-# Filter by location
-python3 view_infrastructure_map.py location US
-
-# Find cheapest models
-python3 view_infrastructure_map.py cheapest 20
-```
-
-### Run Web Interface
-```bash
-# Option 1: Custom server (recommended)
-python3 serve.py
-# Opens http://localhost:8000
-
-# Option 2: Built-in server
-python3 -m http.server 9999
-# Then open http://localhost:9999/index.html
-
-# Option 3: Standalone (no server)
-open index_standalone.html  # Mac
-start index_standalone.html  # Windows
-```
-
-### Web Research (Enrichment)
-
-Provider research is done via background AI agents to find company info:
-
-```bash
-# Manual research helper
-python3 research_providers.py
-# Shows top providers and search queries
-
-# Research results integrate automatically
-python3 integrate_research.py
-# Merges provider_research.json → infrastructure_provider_map.json
-```
-
-Fields enriched: `homepage`, `contact_email`, `support_url`, `headquarters_city`, `company_description`
-
-## Data Files
-
-### Source of Truth
-- **infrastructure_provider_map.json** - Main data file (1.1MB)
-  - Generated by `map_infrastructure_providers.py`
-  - Contains all 67 providers with full details
-  - Updated by `integrate_research.py` to add enrichments
-
-### Daily Reports (NEW)
-- **daily_report.md** - Human-readable markdown report
-  - Generated by `generate_daily_report.py`
-  - Tracks TTS, STT, video, image generation features
-  - Includes pricing trends and provider rankings
-- **daily_report.json** - Machine-readable JSON report
-  - Same data as markdown in structured format
-  - Easy to parse for automation/dashboards
-- **ADVANCED_FEATURES_REPORT.md** - Comprehensive feature analysis
-  - One-time deep dive into all advanced features
-  - Reference document for capabilities
-
-### Intermediate/Cache Files
-- **openrouter_models.json** - All 368 models (raw from API)
-- **openrouter_providers.json** - All provider metadata (raw from API)  
-- **mapping_progress.json** - Progress tracker (can resume after interruption)
-- **provider_research.json** - Web research results (67 providers with descriptions)
-
-### Web Interface
-- **index.html** - Main UI (requires server)
-- **index_standalone.html** - Embedded data version (no server needed)
-- **serve.py** - Simple HTTP server (port 8000)
-
-## UI Architecture
-
-### 4 Main Views (Tabs)
-1. **All Providers** - Sortable/filterable table of all 67 providers
-2. **By Geography** - Grouped by country (US, CN, SG, FR, etc.)
-3. **Performance Leaders** - Top 15 by uptime and latency
-4. **Pricing Comparison** - Free models and cheapest paid options
-
-### Provider Modal
-Click any provider name → modal shows:
-- Company description (if available)
-- Location with city
-- Links: homepage, contact email, support, status page, privacy, terms
-- Pricing ranges
-- Performance stats
-- Up to 50 models with individual pricing/performance
-
-### Filtering System
-All filters combine (AND logic):
-- Search box (provider name or model ID)
-- Location dropdown
-- Min models (numeric)
-- Min uptime (percentage)
-
-### Sorting
-Click column headers to sort:
-- First click: descending (↓)
-- Second click: ascending (↑)
-- Active column highlighted
-
-## Important Patterns
-
-### Matching Providers Between APIs
-
-```python
-# From endpoints API
-endpoint = {
-    "provider_name": "DeepInfra",
-    "tag": "deepinfra/turbo"  # ← Extract slug from here
-}
-
-# Extract slug (before slash)
-slug = endpoint['tag'].split('/')[0]  # "deepinfra"
-
-# Match to providers API
-provider = providers_map[slug]  # Look up by slug
-headquarters = provider['headquarters']  # "US"
-```
-
-### Progress Tracking (Resume on Failure)
-
-`map_infrastructure_providers.py` fetches 368 model endpoints (~2 minutes). It saves progress every 10 models:
-
-```python
-# Load previous progress
-progress = load_progress()  # mapping_progress.json
-start = progress['last_model_index']
-
-# Resume from last position
-for i in range(start, len(models)):
-    fetch_endpoints(models[i])
-    if i % 10 == 0:
-        save_progress(progress)  # Checkpoint
-```
-
-If interrupted, just re-run the script - it continues where it left off.
-
-### Handling Missing Data
-
-The codebase prioritizes accuracy over completeness:
-- Show "N/A" or "Unknown" for missing fields
-- Never guess or infer data
-- 14 providers (21%) have no location data - this is expected
-- 49 providers (73%) have no datacenter data - this is expected
-
-From DATA_SOURCES.md philosophy: "Better to show Unknown than incorrect data"
 
 ## API Token
 
-The OpenRouter API token is hardcoded in `map_infrastructure_providers.py` line 21:
+Set `OPENROUTER_API_TOKEN` in `.env` or export it in your shell. Falls back to a hardcoded token in `src/llm_providers/config.py` — update that token if API calls fail with 401.
+
+## Important Patterns
+
+### Progress Tracking (Resume on Failure)
+
+`map_infrastructure.py` saves a checkpoint every 10 models to `data/mapping_progress.json`. If interrupted, just re-run `make map-infra` — it resumes from the last checkpoint.
+
+### Handling Missing Data
+
+- Show "N/A" or "Unknown" for missing fields — never guess or infer
+- 14 providers (21%) have no location data — this is expected
+- 49 providers (73%) have no datacenter data — this is expected
+
+### Standalone HTML Generation
+
+`webapp/index_standalone.html` is gitignored — regenerate it when needed:
+
 ```python
-API_TOKEN = "REDACTED_OPENROUTER_TOKEN_1"
-```
+import json, re
+from pathlib import Path
 
-**Important**: This token is visible in the code. If API calls fail with 401 Unauthorized, update this token. The token is required for fetching model endpoints but not for the basic models/providers API calls.
+repo = Path(__file__).parent  # adjust if running from elsewhere
+data = json.loads((repo / "data/infrastructure_provider_map.json").read_text())
+html = (repo / "webapp/index.html").read_text()
 
-## Performance Considerations
-
-### Data Size
-- JSON file: 1.1MB (67 providers × 368 models)
-- Standalone HTML: 780KB (JSON embedded)
-- Browser must parse and render large dataset
-
-### Browser Caching Issues
-When updating data and the browser shows old data:
-1. Regenerate `index_standalone.html` (data must be embedded correctly)
-2. Kill old web server process: `pkill -f "http.server"`
-3. Start new server on **different port**: `python3 -m http.server 7777`
-4. Hard refresh in browser: Cmd+Shift+R (Mac) / Ctrl+Shift+R (Windows)
-5. **Best solution**: Open in new incognito/private window to guarantee fresh load
-
-**Common Error**: "initializeUI is not defined"
-- Cause: Browser cached old broken version of standalone HTML
-- Fix: Open in incognito window OR use different port
-
-## Daily Report Features
-
-The daily report system (`generate_daily_report.py`) provides comprehensive tracking of:
-
-### Advanced Features Tracked
-1. **Full Voice Conversation (STT + TTS)** - Models with both audio input and output
-2. **Speech-to-Text (STT)** - Models that can process audio input
-3. **Text-to-Speech (TTS)** - Models that can generate audio output
-4. **Video Input** - Models that can analyze video
-5. **Image Generation** - Models that can create images
-6. **Multimodal** - Models with 2+ input modalities
-
-### Report Includes
-- Total model and provider counts
-- Pricing trends (min/max/avg per 1M tokens)
-- Free vs paid model breakdown
-- Provider rankings by feature support
-- Geographic distribution
-- Cheapest options per feature
-- Export capabilities for further analysis
-
-### Key Current Statistics
-- **24 models** (6.5%) support audio features
-- **42 models** (11.4%) support video input
-- **7 models** (1.9%) support image generation
-- **6 providers** offer audio capabilities (Google, OpenAI, Xiaomi, Mistral, Nvidia, Google AI Studio)
-- **Only 3 models** offer full voice conversation (all from OpenAI)
-
-### Pricing Insights from Daily Report
-- **STT+TTS:** $3.00 - $12.50 per 1M tokens (OpenAI only)
-- **STT only:** FREE (Nvidia) to $14.00 per 1M tokens
-- **TTS only:** FREE (Google Lyria previews)
-- **Video:** 4 free models available, paid from $0.38 per 1M
-- **Image Gen:** $2.80 - $23.00 per 1M tokens
-
-## Key Insights for Future Work
-
-### Geographic Gaps
-- US dominates: 37 of 67 providers (55%)
-- Europe underrepresented: Only FR, NL, SE
-- Asia-Pacific growing: 6 providers in SG, 4 in CN
-
-### Price Competition
-- Free tier exists: Baidu, Nvidia, Venice, Poolside
-- 50x price variation: Same model, different provider
-- DeepInfra and Novita are cheapest paid options
-
-### Performance Patterns
-- Latency varies 50x: 199ms (Cerebras) to 10,000ms (Stealth)
-- Uptime: 14 providers at 100%, many better than big cloud
-- Quantization: DeepInfra offers 6 variants (base, turbo, fp8, bf16, fp16, fp4)
-
-### Model Distribution
-- Popular models on 4-17 providers (multi-cloud reality)
-- Llama most widely available
-- Some models exclusive to native platforms (e.g., certain Claude/GPT versions)
-
-### Advanced Features Distribution (from Daily Report)
-- **Audio concentration:** Google (20 models), OpenAI (3 models) dominate
-- **Video availability:** Google leads with 15 models, Qwen has 12
-- **Image generation:** Limited to OpenAI (3) and Google (3) providers
-- **Market gap:** Only OpenAI offers full voice conversation models
-- **Free options:** 1 STT, 2 TTS, 4 video, 0 image gen models available free
-
-## Development Workflow
-
-### When Making Changes
-
-1. **Edit source files** (Python scripts, `index.html`)
-2. **Test locally** with web server
-3. **Regenerate standalone HTML** if UI changed
-4. **Commit changes** to git
-
-### Files in Git
-**Tracked** (committed):
-- Source code (*.py, index.html)
-- Data files (infrastructure_provider_map.json, provider_research.json)
-- Documentation (*.md)
-- Generated standalone (index_standalone.html)
-
-**Ignored** (.gitignore):
-- Temporary files (mapping_progress.json, test_modal.html, backups)
-- Python cache (__pycache__, *.pyc)
-- IDE/OS files (.vscode, .DS_Store)
-
-### Typical Development Cycle
-
-```bash
-# 1. Make changes to Python scripts or index.html
-
-# 2. If you changed the data pipeline, refresh data
-python3 map_infrastructure_providers.py
-
-# 3. If you changed index.html, regenerate standalone
-python3 << 'EOF'
-import json
-with open('infrastructure_provider_map.json') as f:
-    data = json.load(f)
-with open('index.html') as f:
-    html = f.read()
+# Replace the fetch() call with embedded data
 html = html.replace(
     '''async function loadData() {
             try {
@@ -526,43 +230,42 @@ html = html.replace(
             initializeUI();
         }'''
 )
-with open('index_standalone.html', 'w') as f:
-    f.write(html)
-print("✅ Regenerated standalone")
-EOF
-
-# 4. Test in browser (use new port or incognito to avoid cache)
-python3 -m http.server 7777
-open "http://localhost:7777/index_standalone.html"
-
-# 5. Commit if everything works
-git add -A
-git commit -m "Your descriptive message"
+(repo / "webapp/index_standalone.html").write_text(html)
 ```
 
-### Provider Research Process
+### Browser Caching Issues
 
-The `provider_research.json` file was created via background AI agents that performed web searches for:
-- Company homepage
-- Contact email
-- Support URL
-- Headquarters city
-- Company description
+When updating data and the browser shows old data:
+1. Kill old server: `pkill -f "http.server"`
+2. Start on a new port: `python3 -m http.server 7777`
+3. Hard refresh: Cmd+Shift+R (Mac) / Ctrl+Shift+R
+4. Best: open in a new incognito window
 
-This enrichment is **optional** - the system works without it, but enriched data provides better user experience. To add more provider research:
+## Development Workflow
 
-1. Use AI agent to research providers (web search for official info)
-2. Save results to `provider_research.json` in the format:
-   ```json
-   {
-     "ProviderName": {
-       "homepage": "https://...",
-       "contact_email": "...",
-       "support_url": "https://...",
-       "headquarters_city": "...",
-       "headquarters_country": "US",
-       "company_description": "..."
-     }
-   }
-   ```
-3. Run `python3 integrate_research.py` to merge into main data file
+```bash
+# 1. Edit source in src/llm_providers/ or webapp/
+
+# 2. If you changed the data pipeline, refresh data
+make refresh-all
+
+# 3. Test locally
+make serve
+open "http://localhost:8000/webapp/index.html"
+
+# 4. Deploy
+make deploy   # full deploy
+make ui       # webapp HTML only
+```
+
+## Data Files
+
+| File | Location | In Git | Notes |
+|------|----------|--------|-------|
+| `infrastructure_provider_map.json` | `data/` | No | Generated by `make map-infra` |
+| `openrouter_models.json` | `data/` | No | Fetched by `make fetch-openrouter` |
+| `openrouter_providers.json` | `data/` | No | Fetched by `make fetch-openrouter` |
+| `daily_report.json` | `data/` | No | Generated by `make generate-report` |
+| `daily_report.md` | `data/` | No | Generated by `make generate-report` |
+| `provider_research.json` | `data/seeds/` | **Yes** | Hand-curated company info |
+| `voice_video_models.json` | `data/` | No | Fetched by `make fetch-voice` |

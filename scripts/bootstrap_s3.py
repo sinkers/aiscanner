@@ -67,7 +67,7 @@ def main():
     base_dir = os.path.join(os.path.dirname(__file__), "..")
 
     if not ui_only:
-        data_file = os.path.join(base_dir, "infrastructure_provider_map.json")
+        data_file = os.path.join(base_dir, "data", "infrastructure_provider_map.json")
 
         with open(data_file) as f:
             snapshot = json.load(f)
@@ -172,16 +172,16 @@ def main():
     # ------------------------------------------------------------------
     if upload_ui:
         print("\nUploading UI files...")
-        # Upload HTML files
+        # Upload HTML files (source is in webapp/, but S3 key stays flat)
         for filename in ["index.html", "llm.html", "gpu.html", "voice.html"]:
-            filepath = os.path.join(base_dir, filename)
+            filepath = os.path.join(base_dir, "webapp", filename)
             if os.path.exists(filepath):
                 with open(filepath, "rb") as f:
                     put(s3, bucket_name, filename, f.read(),
                         cache_seconds=300, content_type="text/html; charset=utf-8")
 
         # Upload models data (required for model type filter)
-        models_file = os.path.join(base_dir, "openrouter_models.json")
+        models_file = os.path.join(base_dir, "data", "openrouter_models.json")
         if os.path.exists(models_file):
             with open(models_file, "r") as f:
                 models_data = json.load(f)
