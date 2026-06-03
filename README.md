@@ -1,62 +1,93 @@
-# OpenRouter Infrastructure Provider Map
+# AI Scanner
 
-**Complete mapping of all infrastructure providers hosting AI models on OpenRouter** — who hosts what, where they are, pricing over time, and real-time performance metrics.
+**Compare pricing, performance, and availability across AI infrastructure** — LLM hosting providers, voice/video AI services, and GPU rental markets, all in one place.
 
 Live site: **https://d2urbiy71pvy0i.cloudfront.net**
 
 ## What This Does
 
-OpenRouter aggregates hundreds of AI models from dozens of infrastructure providers worldwide. Each model can be hosted by multiple providers with different pricing, latency, reliability, and location. This project maps it all and tracks pricing history daily.
+The AI market is fragmented across hundreds of providers with different pricing, capabilities, and performance characteristics. AI Scanner aggregates data from multiple sources and presents it in a unified, searchable interface so you can make informed decisions about where to run your AI workloads.
 
-The key distinction: OpenRouter has two types of "providers":
-1. **Model Creator** — company that trained the model (`anthropic` in `anthropic/claude-3.5-sonnet`)
-2. **Infrastructure Provider** — company that hosts/serves the model (Azure, DeepInfra, Together, etc.)
+## Features
 
-This project focuses on #2.
+### LLM Infrastructure Map
+
+Compare infrastructure providers hosting AI models on OpenRouter — who hosts what, where they are, and at what price.
+
+- **Provider table** — sortable and filterable by name, location, model count, pricing
+- **Geography view** — providers grouped by country
+- **Performance leaders** — top providers ranked by uptime and latency
+- **Pricing comparison** — find the cheapest provider for any model
+- **Model comparisons** — side-by-side pricing across providers for models hosted by 2+ providers, with price history charts
+- **Benchmark scores** — Open LLM Leaderboard v2 data integrated into model views
+- **Provider detail modals** — company info, location, pricing ranges, performance stats, and history charts
+
+### Voice & Video AI Services
+
+Compare STT, TTS, and video generation services across providers.
+
+- **Multi-provider catalog** — Deepgram, ElevenLabs, OpenAI, Google, Groq, Fireworks, AssemblyAI, fal.ai, HuggingFace open-source models
+- **Filter by capability** — streaming, real-time, free tier, voice cloning
+- **Pricing breakdowns** — per-minute (STT), per-character (TTS), per-second (video), with streaming vs batch rates
+- **Self-hosting info** — hardware requirements (VRAM, RAM, CPU-only) for open-source models
+- **Trial credit calculator** — see how far free credits go at each provider's rates
+
+### GPU Rental Pricing
+
+Compare GPU rental costs across cloud providers.
+
+- **Multi-provider comparison** — RunPod, Vast.ai, Lambda Labs, TensorDock, Vultr, Azure, AWS, Oracle Cloud
+- **Pricing tiers** — spot, on-demand, and reserved pricing side by side
+- **Filter by GPU model** — search for specific GPUs (A100, H100, RTX 4090, etc.)
+- **Price trends** — historical pricing charts
 
 ## Quick Start
 
 ### View the Live Site
 
-```
-https://d2urbiy71pvy0i.cloudfront.net
-```
-
-Updated daily by a scheduled Lambda. No setup required.
+Visit the CloudFront URL above. Updated daily by a scheduled Lambda. No setup required.
 
 ### Run Locally
 
 ```bash
-python3 -m http.server 8000
-open http://localhost:8000
+# Install dependencies
+pip install -r requirements.txt
+
+# Set your API token
+export OPENROUTER_API_TOKEN=your-token-here
+
+# Refresh all data
+make refresh-all
+
+# Start local dev server
+make serve
+# Open http://localhost:8000/webapp/
 ```
 
-Falls back to `infrastructure_provider_map.json` when `rollups/latest.json` is not available.
+See `make help` for all available targets.
 
-## Web Interface
+## Data Pipeline
 
-### 5 Views
+Four-stage pipeline, all run via `make`:
 
-| Tab | What it shows |
-|---|---|
-| **All Providers** | Sortable/filterable table of all providers |
-| **By Geography** | Providers grouped by country |
-| **Performance Leaders** | Top 15 by uptime and latency |
-| **Pricing Comparison** | Free models and cheapest paid options |
-| **Model Comparisons** | All models with 2+ providers — side-by-side pricing and history charts |
+```
+1. FETCH     make fetch-openrouter     Fetch models + providers from OpenRouter API
+2. MAP       make map-infra            Map infrastructure providers (~2 min)
+3. ENRICH    make integrate-research   Merge hand-curated company research
+4. REPORT    make generate-report      Generate daily report (JSON + Markdown)
+```
 
-### Model Comparisons Tab
+Voice/video data has its own fetcher:
 
-The key tab for cost optimisation:
+```
+make fetch-voice       Fetch voice/video models from all providers
+```
 
-- Every model available from more than one provider, sorted by provider count
-- Each row shows cheapest price and the spread between cheapest and most expensive
-- Expand any model to see a **full provider pricing table** (prompt/1M, completion/1M, total, uptime, latency) sorted cheapest first
-- **Price history chart** — one line per provider, tracks combined price/1M over time (builds up from the daily Lambda runs)
+Run `make refresh-all` to execute the full LLM pipeline end to end.
 
-### Provider Details Modal
+### Progress Tracking
 
-Click any provider name to see company description, location, links, pricing ranges, performance stats, and a pricing history chart for that provider.
+The infrastructure mapper saves a checkpoint every 10 models. If interrupted, re-run `make map-infra` — it resumes from the last checkpoint.
 
 ## AWS Deployment
 
@@ -66,154 +97,56 @@ The project runs as a **scheduled Lambda + static S3 site**, deployed with CDK.
 EventBridge (daily 00:00 UTC)
     └── Lambda (collector, ~90s, 512MB)
             ├── Fetches all model endpoints from OpenRouter API
-            ├── snapshots/YYYY-MM-DD.json   raw daily archive
-            ├── rollups/latest.json          current state (UI loads this)
-            ├── rollups/providers/{name}.json  per-provider history
-            └── rollups/models/{id}.json       per-model cross-provider history
+            ├── snapshots/YYYY-MM-DD.json     daily archive
+            ├── rollups/latest.json            current state (UI loads this)
+            ├── rollups/providers/{name}.json   per-provider history
+            └── rollups/models/{id}.json        per-model history
                         ↓
-                S3 bucket (private)
+                S3 bucket (private, OAC)
                         ↓
-                CloudFront distribution
+                CloudFront (HTTPS, cached)
                         ↓
                     Browser
 ```
 
-### Deploy from Scratch
-
-Requires AWS credentials and Node.js (for CDK CLI).
+### Deploy
 
 ```bash
-./deploy.sh
-```
-
-This bootstraps CDK, deploys the stack, seeds S3 with existing data, and uploads the UI. Prints the CloudFront URL when done.
-
-### Makefile Targets
-
-```bash
-make deploy      # Full deploy: CDK + seed S3 with existing data
-make diff        # Preview pending infrastructure changes
-make seed        # Re-upload data and index.html without redeploying
-make invoke      # Manually trigger the Lambda and tail logs
-make serve       # Local dev server on port 8000
+make deploy      # Full deploy: CDK + seed S3
+make ui          # Upload webapp HTML only
+make seed        # Upload data + UI without redeploying
+make invoke      # Manually trigger the Lambda
 make destroy     # Tear down the stack (bucket is retained)
 ```
 
-### Infrastructure
+Requires AWS credentials and Node.js (for CDK CLI). Run `./deploy/deploy.sh` for a from-scratch deploy.
 
-| Resource | Details |
-|---|---|
-| S3 bucket | `dame-openrouter-pricing-{account-id}` — private, served via CloudFront OAC |
-| CloudFront | HTTPS, 1h cache on rollups, 5min cache on `index.html` |
-| Lambda | Python 3.12, 512MB, 15min timeout |
-| EventBridge | `cron(0 0 * * ? *)` — daily at midnight UTC |
+## Data Sources
 
-### S3 Layout
-
-```
-snapshots/YYYY-MM-DD.json       raw daily snapshot (~1MB each, 24h cache)
-rollups/latest.json             current provider map (UI primary source)
-rollups/providers/{name}.json   per-provider pricing history
-rollups/models/{id}.json        per-model cross-provider pricing history
-index.html                      the UI
-```
-
-## Local Data Pipeline
-
-To refresh data locally (e.g. to seed a new deployment):
-
-```bash
-# 1. Fetch base catalogues (rarely changes)
-python3 fetch_openrouter.py
-
-# 2. Map all infrastructure providers (~90 seconds)
-python3 map_infrastructure_providers.py
-
-# 3. Optionally enrich with company research
-python3 integrate_research.py
-
-# 4. Upload to S3
-make seed
-```
-
-`map_infrastructure_providers.py` saves progress every 10 models to `mapping_progress.json` and resumes on re-run if interrupted.
-
-## Key Files
-
-### Infrastructure (AWS)
-- **`lambda/handler.py`** — Lambda function: fetches endpoints, writes snapshot + rollups
-- **`infra/stack.py`** — CDK stack: S3, CloudFront, Lambda, EventBridge
-- **`infra/app.py`** — CDK app entry point
-- **`scripts/bootstrap_s3.py`** — Seeds S3 from existing `infrastructure_provider_map.json`
-- **`Makefile`** — Common operations
-- **`deploy.sh`** — One-command deploy
-
-### Data Pipeline
-- **`map_infrastructure_providers.py`** — Core mapper (fetches all endpoint data)
-- **`fetch_openrouter.py`** — Fetches models and providers catalogues
-- **`integrate_research.py`** — Merges `provider_research.json` enrichment data
-- **`view_infrastructure_map.py`** — CLI query tool
-
-### Data Files
-- **`infrastructure_provider_map.json`** — Current provider map (local source of truth)
-- **`provider_research.json`** — Company info: homepage, contact, description
-
-### Web UI
-- **`index.html`** — Full UI (Chart.js, all views, provider modal with history charts)
-- **`index_standalone.html`** — Standalone version with data embedded (no server needed)
-
-## CLI Query Tool
-
-```bash
-python3 view_infrastructure_map.py list
-python3 view_infrastructure_map.py provider "DeepInfra"
-python3 view_infrastructure_map.py model "meta-llama/llama-3.1-70b-instruct"
-python3 view_infrastructure_map.py location US
-python3 view_infrastructure_map.py cheapest 20
-```
+| Source | What it provides | Update frequency |
+|---|---|---|
+| [OpenRouter API](https://openrouter.ai) | LLM models, providers, endpoints, pricing, performance | Daily (Lambda) |
+| [Deepgram API](https://deepgram.com) | STT/TTS models and pricing | On demand |
+| [ElevenLabs API](https://elevenlabs.io) | TTS/STS models, voice catalog, pricing | On demand |
+| [OpenAI API](https://openai.com) | TTS/STT models and pricing | On demand |
+| [Groq API](https://groq.com) | STT models and pricing | On demand |
+| [fal.ai API](https://fal.ai) | Image/video generation models and pricing | On demand |
+| [HuggingFace](https://huggingface.co) | Open-source model metadata, downloads, hardware reqs | On demand |
+| [Open LLM Leaderboard](https://huggingface.co/spaces/open-llm-leaderboard/open_llm_leaderboard) | Benchmark scores | On demand |
+| GPU provider APIs | Spot/on-demand/reserved GPU pricing | On demand |
 
 ## Technical Notes
 
-### API URL Encoding
+**Pricing format**: Stored as dollars per token; displayed as dollars per 1M tokens (multiply by 1,000,000).
 
-Model IDs in endpoint URLs must **not** be URL-encoded:
-```
-✅  /api/v1/models/openai/gpt-4/endpoints
-❌  /api/v1/models/openai%2Fgpt-4/endpoints  (404)
-```
+**API URL encoding**: Model IDs in OpenRouter endpoint URLs must not be URL-encoded (`/api/v1/models/openai/gpt-4/endpoints`, not `openai%2Fgpt-4`).
 
-### Pricing Format
-
-Stored as dollars per token; displayed as dollars per 1M tokens (multiply × 1,000,000).
-
-### Rollup File Keys
-
-Provider names with spaces/slashes have them replaced with `_` (e.g. `Azure AI Studio` → `Azure_AI_Studio.json`). Model IDs with `:` have them replaced with `_` (e.g. `model:free` → `model_free.json`); `/` in model IDs becomes a path prefix in S3 (e.g. `meta-llama/llama-3.1-70b-instruct.json`).
-
-## Data Quality
-
-| Data | Reliability | Source |
-|---|---|---|
-| Pricing | Real-time | OpenRouter API |
-| Performance (uptime, latency) | Real-time, last 24h/30m | OpenRouter API |
-| Model availability | Accurate | OpenRouter API |
-| Provider headquarters | ~79% coverage | OpenRouter API |
-| Company info (homepage, description) | ~88% coverage | `provider_research.json` |
-
-Philosophy: show "Unknown" rather than guessed data.
+**Missing data**: Shows "Unknown" or "N/A" rather than guessed values. ~21% of providers lack location data; this is expected.
 
 ## Troubleshooting
 
-**Browser shows old data after `make seed`**
-CloudFront caches `index.html` for 5 minutes. Hard refresh with Cmd+Shift+R or open in incognito.
+**Browser shows old data** — CloudFront caches HTML for 5 minutes. Hard refresh (Cmd+Shift+R) or use incognito.
 
-**Lambda 401 Unauthorized**
-The OpenRouter token in `infra/stack.py` (env var `OPENROUTER_API_TOKEN`) may have expired. Update it and run `make deploy`.
+**Lambda 401 Unauthorized** — The `OPENROUTER_API_TOKEN` environment variable may have expired. Update it and redeploy.
 
-**`make deploy` fails at CDK bootstrap**
-Ensure `aws configure` is set and you have permissions to create IAM roles and S3 buckets.
-
----
-
-**Data Source**: OpenRouter API (https://openrouter.ai)  
-**Updated**: Daily at 00:00 UTC by scheduled Lambda
+**`make deploy` fails at CDK bootstrap** — Ensure `aws configure` is set with permissions for IAM roles and S3 buckets.
