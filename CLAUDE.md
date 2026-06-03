@@ -2,6 +2,15 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## PUBLIC REPOSITORY — Security Rules
+
+This is a **public GitHub repo** (github.com/sinkers/aiscanner). Never commit:
+- API keys, tokens, or secrets (use `.env` + environment variables)
+- Private configuration, credentials, or internal URLs
+- `.env` files (already gitignored — keep it that way)
+
+All secrets must come from environment variables or AWS SSM Parameter Store. If you see a hardcoded key, remove it immediately.
+
 ## Project Overview
 
 OpenRouter Infrastructure Provider Mapper — maps infrastructure providers hosting models on OpenRouter, showing who hosts what, where they are, pricing, and real-time performance metrics.
@@ -185,7 +194,7 @@ make configure-gpu-env     # Load GPU keys from .env into SSM
 
 ## API Token
 
-Set `OPENROUTER_API_TOKEN` in `.env` or export it in your shell. Falls back to a hardcoded token in `src/llm_providers/config.py` — update that token if API calls fail with 401.
+Set `OPENROUTER_API_TOKEN` in `.env` or export it in your shell. The code requires this env var — there is no fallback. If API calls fail with 401, check your token is set correctly.
 
 ## Important Patterns
 

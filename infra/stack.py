@@ -147,7 +147,7 @@ class PricingStack(Stack):
             description="Daily OpenRouter pricing snapshot and rollup generator",
             environment={
                 "S3_BUCKET": bucket.bucket_name,
-                "OPENROUTER_API_TOKEN": "REDACTED_OPENROUTER_TOKEN_2",
+                "OPENROUTER_API_TOKEN": os.environ.get("OPENROUTER_API_TOKEN", ""),
                 # GPU API keys are read from SSM Parameter Store at runtime.
                 # Set them once with:  make configure-gpu  (or load from .env)
                 # Env vars here are a fallback for local testing only.

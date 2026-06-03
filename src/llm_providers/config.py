@@ -10,11 +10,8 @@ DATA_DIR = REPO_ROOT / "data"
 SEEDS_DIR = DATA_DIR / "seeds"
 WEBAPP_DIR = REPO_ROOT / "webapp"
 
-# OpenRouter API
-OPENROUTER_API_TOKEN = os.environ.get(
-    "OPENROUTER_API_TOKEN",
-    "REDACTED_OPENROUTER_TOKEN_1",
-)
+# OpenRouter API — token MUST come from environment or .env file, never hardcoded
+OPENROUTER_API_TOKEN = os.environ.get("OPENROUTER_API_TOKEN", "")
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 # Data file paths
