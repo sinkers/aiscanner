@@ -347,10 +347,14 @@
                 </select>
             </div>
             <div class="toggle-group">
-                <div class="toggle" id="toggle-streaming" data-filter="streaming">Streaming</div>
-                <div class="toggle" id="toggle-realtime" data-filter="realtime">Real-time</div>
+                <div class="toggle" id="toggle-streaming" data-filter="streaming" title="Streaming: audio processed in a continuous stream with results returned incrementally. Suitable for live transcription but may have latency of several seconds.">Streaming</div>
+                <div class="toggle" id="toggle-realtime" data-filter="realtime" title="Real-time: sub-200ms latency, suitable for live conversations and voice assistants where you need immediate responses.">Real-time</div>
                 <div class="toggle" id="toggle-free" data-filter="free">Free Tier</div>
                 <div class="toggle" id="toggle-clone" data-filter="clone">Voice Clone</div>
+            </div>
+            <div style="font-size:0.75em;color:#888;margin-top:4px;padding-left:4px">
+                <strong>Streaming</strong> = incremental results from live audio (seconds latency) &nbsp;·&nbsp;
+                <strong>Real-time</strong> = &lt;200ms latency for live conversations
             </div>
         </div>
 
@@ -492,13 +496,18 @@
 
         function formatPrice(model) {
             const p = model.pricing || {};
-            if (p.amount === 0 || p.model === 'open_source') return '<span class="price-free">FREE</span>';
+            const tech = model.technical || {};
+            // Open source / self-hosted: price is infrastructure cost, not service cost
+            if (p.model === 'open_source' || (tech.self_hostable && tech.open_source)) {
+                return '<span class="price-free" title="Open source — free to use, you pay your own compute costs">Self-hosted</span>';
+            }
             const norm = p.normalized || {};
             if (norm.per_hour_usd) return `<span class="price">$${norm.per_hour_usd.toFixed(3)}/hr</span>`;
             if (norm.per_million_chars_usd) return `<span class="price">$${norm.per_million_chars_usd.toFixed(1)}/1M chars</span>`;
             if (norm.per_image_usd) return `<span class="price">$${norm.per_image_usd.toFixed(3)}/image</span>`;
             if (norm.per_second_usd) return `<span class="price">$${norm.per_second_usd.toFixed(3)}/sec</span>`;
             if (p.estimated_per_1k_chars) return `<span class="price">~$${p.estimated_per_1k_chars.toFixed(2)}/1K chars</span>`;
+            if (p.amount === 0) return '<span class="price-free">FREE</span>';
             return '<span style="color:#666">-</span>';
         }
 
@@ -564,7 +573,13 @@
                 if (m.has_streaming) features.push('<span class="badge badge-streaming">Streaming</span>');
                 if (m.capabilities?.voice_cloning) features.push('<span class="badge badge-realtime">Clone</span>');
                 if (m.technical?.open_source) features.push('<span class="badge badge-opensource">OSS</span>');
-                if (m.pricing?.free_tier) features.push('<span class="badge badge-free">Free</span>');
+                if (m.pricing?.free_tier) {
+                    const label = m.pricing.free_tier_type === 'trial_credit' ? 'Trial' : 'Free';
+                    const title = m.pricing.free_tier_type === 'trial_credit'
+                        ? `${m.pricing.free_tier_amount || 'Trial credit'} — then paid`
+                        : (m.pricing.free_tier_amount || 'Free tier available');
+                    features.push(`<span class="badge badge-free" title="${title}">${label}</span>`);
+                }
 
                 const langs = m.capabilities?.language_count || '';
 
@@ -723,7 +738,10 @@
                     <div class="modal-section-title">Pricing</div>
                     <div class="modal-grid">
                         <div class="modal-field"><div class="modal-field-label">Price</div><div class="modal-field-value">${formatPrice(model)}</div></div>
-                        <div class="modal-field"><div class="modal-field-label">Free Tier</div><div class="modal-field-value">${pricing.free_tier ? (pricing.free_tier_amount || 'Yes') : 'No'}</div></div>
+                        ${pricing.streaming_rate ? `<div class="modal-field"><div class="modal-field-label">Streaming Rate</div><div class="modal-field-value">$${pricing.streaming_rate.toFixed(4)}/min</div></div>` : ''}
+                        ${pricing.batch_rate ? `<div class="modal-field"><div class="modal-field-label">Batch Rate</div><div class="modal-field-value">$${pricing.batch_rate.toFixed(4)}/min</div></div>` : ''}
+                        ${pricing.free_tier ? `<div class="modal-field"><div class="modal-field-label">${pricing.free_tier_type === 'trial_credit' ? 'Trial Credit' : 'Free Tier'}</div><div class="modal-field-value">${pricing.free_tier_amount || 'Yes'}</div></div>` : '<div class="modal-field"><div class="modal-field-label">Free Tier</div><div class="modal-field-value">No</div></div>'}
+                        ${pricing.free_tier && pricing.free_tier_limit ? `<div class="modal-field"><div class="modal-field-label">Credit Equivalent</div><div class="modal-field-value" style="font-size:0.9em">${pricing.free_tier_limit}</div></div>` : ''}
                         ${pricing.billing_increment ? `<div class="modal-field"><div class="modal-field-label">Billing</div><div class="modal-field-value">${pricing.billing_increment}</div></div>` : ''}
                         ${pricing.notes ? `<div class="modal-field"><div class="modal-field-label">Notes</div><div class="modal-field-value" style="font-size:0.85em">${pricing.notes}</div></div>` : ''}
                     </div>
@@ -738,8 +756,21 @@
                         ${tech.parameters ? `<div class="modal-field"><div class="modal-field-label">Parameters</div><div class="modal-field-value">${(tech.parameters / 1e9).toFixed(1)}B</div></div>` : ''}
                         ${tech.license ? `<div class="modal-field"><div class="modal-field-label">License</div><div class="modal-field-value">${tech.license}</div></div>` : ''}
                         ${cap.speed ? `<div class="modal-field"><div class="modal-field-label">Speed</div><div class="modal-field-value">${cap.speed}</div></div>` : ''}
+                        ${cap.use_cases && cap.use_cases.length ? `<div class="modal-field" style="grid-column:1/-1"><div class="modal-field-label">Use Cases</div><div class="modal-field-value">${cap.use_cases.join(', ')}</div></div>` : ''}
                     </div>
                 </div>
+
+                ${tech.self_hostable ? `<div class="modal-section">
+                    <div class="modal-section-title">Self-Hosting</div>
+                    <div class="modal-grid">
+                        <div class="modal-field"><div class="modal-field-label">Self-Hostable</div><div class="modal-field-value">Yes</div></div>
+                        ${tech.min_hardware ? `<div class="modal-field"><div class="modal-field-label">Min Hardware</div><div class="modal-field-value">${tech.min_hardware}</div></div>` : ''}
+                        ${tech.min_vram_gb ? `<div class="modal-field"><div class="modal-field-label">Min VRAM</div><div class="modal-field-value">${tech.min_vram_gb} GB GPU</div></div>` : ''}
+                        ${tech.min_ram_gb ? `<div class="modal-field"><div class="modal-field-label">Min RAM</div><div class="modal-field-value">${tech.min_ram_gb} GB</div></div>` : ''}
+                        ${tech.cpu_only ? `<div class="modal-field"><div class="modal-field-label">CPU Only</div><div class="modal-field-value">Yes (no GPU required)</div></div>` : ''}
+                        ${tech.hf_model_id ? `<div class="modal-field"><div class="modal-field-label">HuggingFace</div><div class="modal-field-value" style="font-size:0.85em">${tech.hf_model_id}</div></div>` : ''}
+                    </div>
+                </div>` : ''}
 
                 ${info.api_base_url ? `<div class="modal-section">
                     <div class="modal-section-title">API Details</div>

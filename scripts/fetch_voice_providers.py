@@ -45,25 +45,86 @@ def fetch_json(url, headers=None):
 # DEEPGRAM
 # =============================================================================
 
+# Pricing by model family (per minute, USD)
 DEEPGRAM_STT_PRICING = {
-    "nova-3": {"streaming": 0.0048, "batch": 0.0077, "unit": "per_minute"},
+    "nova-3":             {"streaming": 0.0059, "batch": 0.0077, "unit": "per_minute"},
     "nova-3-multilingual": {"streaming": 0.0058, "batch": 0.0092, "unit": "per_minute"},
-    "nova-2": {"streaming": 0.0043, "batch": 0.0059, "unit": "per_minute"},
-    "flux": {"streaming": 0.0065, "batch": 0.0077, "unit": "per_minute"},
-    "whisper-cloud": {"batch": 0.0048, "unit": "per_minute"},
+    "nova-2":             {"streaming": 0.0043, "batch": 0.0059, "unit": "per_minute"},
+    "nova-2-medical":     {"streaming": 0.0077, "batch": 0.0077, "unit": "per_minute"},
+    "nova-1":             {"streaming": 0.0025, "batch": 0.0036, "unit": "per_minute"},
+    "flux":               {"streaming": 0.0065, "batch": 0.0077, "unit": "per_minute"},
+    "whisper":            {"batch":     0.0048, "unit": "per_minute"},
 }
 
 DEEPGRAM_TTS_PRICING = {
     "aura-2": {"amount": 0.030, "unit": "per_1k_chars"},
-    "aura": {"amount": 0.015, "unit": "per_1k_chars"},
+    "aura-1": {"amount": 0.015, "unit": "per_1k_chars"},
 }
+
+# Map API model names → canonical family for rollup.
+# Models not listed here are skipped (test/internal/niche).
+# Format: api_name -> (family_key, use_case_tag)
+DEEPGRAM_STT_FAMILY_MAP = {
+    # Nova-2 use-case variants → nova-2 family
+    "2-general":         ("nova-2", "general"),
+    "2-automotive":      ("nova-2", "automotive"),
+    "2-atc":             ("nova-2", "atc"),
+    "2-conversationalai": ("nova-2", "conversational AI"),
+    "2-drivethru":       ("nova-2", "drive-thru"),
+    "2-finance":         ("nova-2", "finance"),
+    "2-meeting":         ("nova-2", "meeting"),
+    "2-phonecall":       ("nova-2", "phone call"),
+    "2-video":           ("nova-2", "video"),
+    "2-voicemail":       ("nova-2", "voicemail"),
+    # Nova-2 Medical (distinct pricing)
+    "2-medical":         ("nova-2-medical", "medical"),
+    # Nova-1 use-case variants → nova-1 family
+    "general":           ("nova-1", "general"),
+    "automotive":        ("nova-1", "automotive"),
+    "conversationalai":  ("nova-1", "conversational AI"),
+    "drivethru":         ("nova-1", "drive-thru"),
+    "finance":           ("nova-1", "finance"),
+    "meeting":           ("nova-1", "meeting"),
+    "phonecall":         ("nova-1", "phone call"),
+    "video":             ("nova-1", "video"),
+    "voicemail":         ("nova-1", "voicemail"),
+    "medical":           ("nova-1", "medical"),
+    # Whisper sizes → whisper family
+    "base":              ("whisper", "general"),
+    "small":             ("whisper", "general"),
+    "medium":            ("whisper", "general"),
+    "large":             ("whisper", "general"),
+    "tiny":              ("whisper", "general"),
+    # Nova-3 (if present in API response)
+    "3-general":         ("nova-3", "general"),
+    "nova-3":            ("nova-3", "general"),
+    "nova-3-multilingual": ("nova-3-multilingual", "multilingual"),
+}
+
+# Display config per family
+DEEPGRAM_FAMILY_CONFIG = {
+    "nova-3":             {"display": "Deepgram Nova-3", "streaming": True, "notes": None},
+    "nova-3-multilingual": {"display": "Deepgram Nova-3 Multilingual", "streaming": True, "notes": None},
+    "nova-2":             {"display": "Deepgram Nova-2", "streaming": True, "notes": None},
+    "nova-2-medical":     {"display": "Deepgram Nova-2 Medical", "streaming": True, "notes": "Medical-grade accuracy, English only"},
+    "nova-1":             {"display": "Deepgram Nova-1 (Enhanced)", "streaming": True, "notes": "Legacy tier — Nova-2 recommended for new projects"},
+    "whisper":            {"display": "Deepgram Whisper", "streaming": False, "notes": "Batch only. Available in sizes: tiny, base, small, medium, large"},
+}
+
+
+def _free_tier_limit(price_per_min, credit=200.0):
+    """Compute how many hours $200 credit buys at a given $/min rate."""
+    if not price_per_min:
+        return None
+    hrs = credit / price_per_min / 60
+    return f"~{hrs:,.0f} hrs on ${credit:.0f} credit"
 
 
 def fetch_deepgram():
     """Fetch Deepgram models (no auth required for public endpoint).
 
-    Rolls up per-language variants into single model entries,
-    and rolls up TTS voices into model-level entries with voice counts.
+    Rolls up all use-case variants into 4-5 family entries (Nova-3, Nova-2,
+    Nova-2 Medical, Nova-1, Whisper) and 2 TTS entries (Aura-2, Aura-1).
     """
     print("\n--- Deepgram ---")
     data = fetch_json("https://api.deepgram.com/v1/models")
@@ -73,40 +134,60 @@ def fetch_deepgram():
 
     models = []
 
-    # Process STT models — roll up by model name, collecting all languages
+    # Process STT models — roll up into families
     stt_raw = data.get("stt", data.get("models", []))
-    stt_by_name = {}
+    families = {}  # family_key -> {"languages": set(), "use_cases": set()}
     if isinstance(stt_raw, list):
         for m in stt_raw:
             model_name = m.get("name", m.get("canonical_name", "unknown"))
             languages = m.get("languages", [])
             lang_codes = [l.get("code", l) if isinstance(l, dict) else l for l in languages]
 
-            if model_name not in stt_by_name:
-                stt_by_name[model_name] = {"languages": set(), "raw": m}
-            stt_by_name[model_name]["languages"].update(lang_codes)
+            family_info = DEEPGRAM_STT_FAMILY_MAP.get(model_name)
+            if family_info is None:
+                continue  # skip test/internal/niche models
 
-    print(f"  STT: {len(stt_raw)} raw entries -> {len(stt_by_name)} models (rolled up)")
+            family_key, use_case = family_info
+            if family_key not in families:
+                families[family_key] = {"languages": set(), "use_cases": set()}
+            families[family_key]["languages"].update(lang_codes)
+            if use_case:
+                families[family_key]["use_cases"].add(use_case)
 
-    for model_name, info in stt_by_name.items():
-        all_langs = sorted(info["languages"])
+    print(f"  STT: {len(stt_raw)} raw entries -> {len(families)} families")
 
-        # Look up pricing — try exact match, then prefix match
-        pricing_key = model_name.lower().replace(" ", "-")
-        price_info = DEEPGRAM_STT_PRICING.get(pricing_key, {})
-        if not price_info:
-            # Try matching nova-3, nova-2 etc from the name
-            for key in DEEPGRAM_STT_PRICING:
-                if key in pricing_key:
-                    price_info = DEEPGRAM_STT_PRICING[key]
-                    break
+    _base_provider = {
+        "signup_url": "https://console.deepgram.com/signup",
+        "api_base_url": "https://api.deepgram.com",
+        "docs_url": "https://developers.deepgram.com",
+        "auth_method": "header",
+        "auth_header": "Authorization",
+        "auth_format": "Token {key}",
+        "python_sdk": "deepgram-sdk",
+    }
+    _base_tech = {
+        "architecture": "proprietary",
+        "license": "commercial",
+        "open_source": False,
+        "self_hostable": False,
+        "openai_compatible": False,
+    }
 
+    for family_key, fdata in families.items():
+        price_info = DEEPGRAM_STT_PRICING.get(family_key, {})
         streaming_price = price_info.get("streaming")
         batch_price = price_info.get("batch")
+        effective_price = streaming_price or batch_price or 0
+        cfg = DEEPGRAM_FAMILY_CONFIG.get(family_key, {})
+        has_streaming = cfg.get("streaming", False) and bool(streaming_price)
+        all_langs = sorted(fdata["languages"])
+        use_cases = sorted(fdata["use_cases"])
+
+        ft_limit = _free_tier_limit(effective_price)
 
         models.append({
-            "model_id": f"deepgram/{model_name}",
-            "display_name": f"Deepgram {model_name}",
+            "model_id": f"deepgram/{family_key}",
+            "display_name": cfg.get("display", f"Deepgram {family_key}"),
             "provider": "Deepgram",
             "provider_slug": "deepgram",
             "category": "stt",
@@ -114,81 +195,63 @@ def fetch_deepgram():
                 "rest_sync": True,
                 "rest_batch": True,
                 "rest_streaming": False,
-                "websocket_streaming": bool(streaming_price),
+                "websocket_streaming": has_streaming,
                 "grpc": False,
                 "sse": False,
             },
             "capabilities": {
-                "real_time": bool(streaming_price),
-                "streaming": bool(streaming_price),
+                "real_time": has_streaming,
+                "streaming": has_streaming,
                 "multilingual": len(all_langs) > 1,
                 "languages": all_langs,
                 "language_count": len(all_langs),
                 "diarization": True,
                 "timestamps": True,
                 "custom_vocabulary": True,
+                "use_cases": use_cases,
             },
             "pricing": {
                 "model": "per_minute",
-                "amount": streaming_price or batch_price or 0,
+                "amount": effective_price,
                 "currency": "USD",
                 "unit": "minute",
                 "streaming_rate": streaming_price,
                 "batch_rate": batch_price,
                 "normalized": {
-                    "per_hour_usd": (streaming_price or batch_price or 0) * 60
+                    "per_hour_usd": round(effective_price * 60, 4)
                 },
                 "free_tier": True,
-                "free_tier_amount": "$200 credit",
+                "free_tier_type": "trial_credit",
+                "free_tier_amount": "$200 one-time credit",
+                "free_tier_limit": ft_limit,
                 "billing_increment": "per_second",
+                **({"notes": cfg["notes"]} if cfg.get("notes") else {}),
             },
-            "technical": {
-                "architecture": "proprietary",
-                "license": "commercial",
-                "open_source": False,
-                "self_hostable": False,
-                "openai_compatible": False,
-            },
-            "provider_info": {
-                "signup_url": "https://console.deepgram.com/signup",
-                "api_base_url": "https://api.deepgram.com",
-                "docs_url": "https://developers.deepgram.com",
-                "auth_method": "header",
-                "auth_header": "Authorization",
-                "auth_format": "Token {key}",
-                "python_sdk": "deepgram-sdk",
-            },
+            "technical": _base_tech,
+            "provider_info": _base_provider,
             "data_source": "deepgram_api",
         })
 
-    # Process TTS — roll up voices into model-level entries (Aura-2 vs Aura-1)
+    # Process TTS — roll up voices into Aura-2 / Aura-1 entries
     tts_raw = data.get("tts", [])
     tts_voices = {"aura-2": [], "aura-1": []}
     if isinstance(tts_raw, list):
         for m in tts_raw:
             voice_name = m.get("name", m.get("canonical_name", "unknown"))
-            # Heuristic: check metadata for version, or assume aura-2 for newer voices
             model_version = m.get("model", m.get("version", ""))
-            if "2" in str(model_version):
-                tts_voices["aura-2"].append(voice_name)
+            if "aura-1" in str(model_version).lower():
+                tts_voices["aura-1"].append(voice_name)
             else:
-                # Default all to aura-2 since that's the current generation
                 tts_voices["aura-2"].append(voice_name)
 
     print(f"  TTS: {len(tts_raw)} voices -> 2 model entries (Aura-2, Aura-1)")
 
-    for model_key, voices in [("aura-2", tts_voices["aura-2"]), ("aura-1", tts_voices["aura-1"])]:
-        if not voices and model_key == "aura-1":
-            # Still create aura-1 entry as it exists at lower price point
-            voices = []
-        price_info = DEEPGRAM_TTS_PRICING.get(model_key.replace("-1", "").replace("-2", "aura-2") if "2" in model_key else "aura", {})
-        if "2" in model_key:
-            price_info = DEEPGRAM_TTS_PRICING["aura-2"]
-        else:
-            price_info = DEEPGRAM_TTS_PRICING["aura"]
-
-        voice_count = len(voices) if voices else None
-        display_name = f"Deepgram Aura 2" if "2" in model_key else "Deepgram Aura 1"
+    for model_key in ["aura-2", "aura-1"]:
+        voices = tts_voices[model_key]
+        price_info = DEEPGRAM_TTS_PRICING[model_key]
+        amt = price_info["amount"]
+        ft_limit = f"~{200 / amt / 1000:,.1f}M chars on $200 credit"
+        display_name = "Deepgram Aura 2" if model_key == "aura-2" else "Deepgram Aura 1"
 
         models.append({
             "model_id": f"deepgram-tts/{model_key}",
@@ -211,37 +274,25 @@ def fetch_deepgram():
                 "multilingual": False,
                 "languages": ["en"],
                 "language_count": 1,
-                "voices_count": voice_count,
-                "voices": voices[:20] if voices else None,  # Sample of voice names
+                "voices_count": len(voices) or None,
+                "voices": voices[:20] if voices else None,
                 "max_input_chars": 2000,
             },
             "pricing": {
                 "model": "per_1k_chars",
-                "amount": price_info.get("amount", 0),
+                "amount": amt,
                 "currency": "USD",
                 "unit": "1k_characters",
                 "normalized": {
-                    "per_million_chars_usd": price_info.get("amount", 0) * 1000
+                    "per_million_chars_usd": amt * 1000
                 },
                 "free_tier": True,
-                "free_tier_amount": "$200 credit (shared with STT)",
+                "free_tier_type": "trial_credit",
+                "free_tier_amount": "$200 one-time credit (shared with STT)",
+                "free_tier_limit": ft_limit,
             },
-            "technical": {
-                "architecture": "proprietary",
-                "license": "commercial",
-                "open_source": False,
-                "self_hostable": False,
-                "openai_compatible": False,
-            },
-            "provider_info": {
-                "signup_url": "https://console.deepgram.com/signup",
-                "api_base_url": "https://api.deepgram.com",
-                "docs_url": "https://developers.deepgram.com",
-                "auth_method": "header",
-                "auth_header": "Authorization",
-                "auth_format": "Token {key}",
-                "python_sdk": "deepgram-sdk",
-            },
+            "technical": _base_tech,
+            "provider_info": _base_provider,
             "data_source": "deepgram_api",
         })
 

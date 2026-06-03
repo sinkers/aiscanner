@@ -63,6 +63,54 @@ def fetch_model_detail(model_id):
         return None
 
 
+# Hardware requirements for well-known models.
+# Keys are substrings that appear in the HuggingFace model ID.
+# First matching entry wins (order matters — more specific first).
+HF_HARDWARE_REQUIREMENTS = {
+    # Whisper variants
+    "whisper-large-v3-turbo":  {"min_vram_gb": 6,  "min_ram_gb": 8,  "cpu_only": False},
+    "whisper-large-v3":        {"min_vram_gb": 10, "min_ram_gb": 12, "cpu_only": False},
+    "whisper-large-v2":        {"min_vram_gb": 10, "min_ram_gb": 12, "cpu_only": False},
+    "whisper-large":           {"min_vram_gb": 10, "min_ram_gb": 12, "cpu_only": False},
+    "whisper-medium":          {"min_vram_gb": 4,  "min_ram_gb": 6,  "cpu_only": False},
+    "whisper-small":           {"min_vram_gb": 2,  "min_ram_gb": 4,  "cpu_only": True},
+    "whisper-base":            {"min_vram_gb": None, "min_ram_gb": 1, "cpu_only": True},
+    "whisper-tiny":            {"min_vram_gb": None, "min_ram_gb": 1, "cpu_only": True},
+    # Wav2Vec2
+    "wav2vec2-large":          {"min_vram_gb": 4,  "min_ram_gb": 6,  "cpu_only": False},
+    "wav2vec2-base":           {"min_vram_gb": None, "min_ram_gb": 2, "cpu_only": True},
+    "wav2vec2":                {"min_vram_gb": None, "min_ram_gb": 2, "cpu_only": True},
+    # MMS
+    "mms-300m":                {"min_vram_gb": 2,  "min_ram_gb": 4,  "cpu_only": True},
+    "mms-1b":                  {"min_vram_gb": 4,  "min_ram_gb": 8,  "cpu_only": False},
+    # Pyannote speaker diarization
+    "speaker-diarization":     {"min_vram_gb": 4,  "min_ram_gb": 6,  "cpu_only": False},
+    "voice-activity-detection": {"min_vram_gb": None, "min_ram_gb": 2, "cpu_only": True},
+    # TTS models
+    "xtts-v2":                 {"min_vram_gb": 6,  "min_ram_gb": 8,  "cpu_only": False},
+    "coqui":                   {"min_vram_gb": 2,  "min_ram_gb": 4,  "cpu_only": True},
+    "bark":                    {"min_vram_gb": 12, "min_ram_gb": 16, "cpu_only": False},
+    "tortoise":                {"min_vram_gb": 8,  "min_ram_gb": 12, "cpu_only": False},
+    "musicgen-large":          {"min_vram_gb": 16, "min_ram_gb": 20, "cpu_only": False},
+    "musicgen-medium":         {"min_vram_gb": 8,  "min_ram_gb": 12, "cpu_only": False},
+    "musicgen-small":          {"min_vram_gb": 4,  "min_ram_gb": 6,  "cpu_only": False},
+    "stable-diffusion-xl":     {"min_vram_gb": 8,  "min_ram_gb": 12, "cpu_only": False},
+    "stable-diffusion-v1":     {"min_vram_gb": 4,  "min_ram_gb": 8,  "cpu_only": False},
+    "stable-diffusion-v2":     {"min_vram_gb": 6,  "min_ram_gb": 10, "cpu_only": False},
+    "flux-1":                  {"min_vram_gb": 12, "min_ram_gb": 16, "cpu_only": False},
+    "flux":                    {"min_vram_gb": 12, "min_ram_gb": 16, "cpu_only": False},
+}
+
+
+def get_hardware_requirements(model_id):
+    """Return hardware requirements for a known model, or None."""
+    model_lower = model_id.lower()
+    for key, reqs in HF_HARDWARE_REQUIREMENTS.items():
+        if key in model_lower:
+            return reqs
+    return None
+
+
 def extract_license(tags):
     """Extract license from tags array."""
     for tag in (tags or []):
@@ -104,6 +152,8 @@ def normalize_to_schema(model, detail=None):
     license_id = extract_license(tags)
     languages = extract_languages(tags)
 
+    hw = get_hardware_requirements(model_id)
+
     return {
         "model_id": f"huggingface/{model_id}",
         "display_name": model_id.split("/")[-1] if "/" in model_id else model_id,
@@ -135,7 +185,7 @@ def normalize_to_schema(model, detail=None):
             "unit": "free",
             "normalized": {},
             "free_tier": True,
-            "notes": "Open source - self-host or use via inference providers",
+            "notes": "Open source — self-host (you pay compute) or use via inference providers",
         },
         "technical": {
             "parameters": params,
@@ -144,6 +194,10 @@ def normalize_to_schema(model, detail=None):
             "open_source": True,
             "self_hostable": True,
             "openai_compatible": False,
+            "hf_model_id": model_id,
+            **({"min_vram_gb": hw["min_vram_gb"]} if hw and hw.get("min_vram_gb") else {}),
+            **({"min_ram_gb": hw["min_ram_gb"]} if hw and hw.get("min_ram_gb") else {}),
+            **({"cpu_only": hw["cpu_only"]} if hw and hw.get("cpu_only") else {}),
         },
         "popularity": {
             "hf_downloads": model.get("downloads", 0),
