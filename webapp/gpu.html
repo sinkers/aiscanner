@@ -148,7 +148,7 @@
         .badge {
             display: inline-block; padding: 2px 10px; border-radius: 20px;
             font-size: 0.78em; font-weight: 600; white-space: nowrap;
-            border: 1px solid;
+            border: 1px solid; margin: 1px 2px;
         }
 
         /* ── Pricing tier badges ── */
@@ -180,37 +180,72 @@
             font-size: 1em; font-weight: 600; color: #06b6d4;
         }
 
-        /* ── History / drill-down ── */
-        .gpu-row { cursor: pointer; }
-        .gpu-history-row td { padding: 0 !important; border-top: none !important; }
-        .gpu-history-content {
+        /* ── Class / Variant accordion ── */
+        .class-row {
+            cursor: pointer;
+            background: #1a1f2e;
+        }
+        .class-row:hover td { background: rgba(6,182,212,0.04); }
+        .class-row td { font-weight: 600; }
+
+        .variant-row {
+            cursor: pointer;
+        }
+        .variant-row td {
+            padding-left: 40px;
+            background: #161b27;
+        }
+        .variant-row:hover td { background: rgba(6,182,212,0.04); }
+
+        .detail-row td {
+            padding: 0 !important;
+            border-top: none !important;
+        }
+        .detail-content {
             display: none;
             background: #0f1419;
-            padding: 16px 20px;
+            padding: 16px 20px 16px 40px;
             border-top: 1px solid #2a2f3e;
         }
-        .gpu-history-content.open { display: block; }
-        .gpu-chevron {
+        .detail-content.open { display: block; }
+
+        .chevron {
             display: inline-block;
             transition: transform 0.2s;
             color: #06b6d4;
             margin-right: 6px;
+            font-size: 0.8em;
         }
+        .chevron.open { transform: rotate(90deg); }
+
+        .class-name {
+            font-size: 1.05em;
+        }
+        .variant-count {
+            font-size: 0.8em;
+            color: #6b7280;
+            font-weight: 400;
+            margin-left: 8px;
+        }
+
+        /* Provider comparison table inside detail */
+        .provider-table {
+            width: 100%; border-collapse: collapse; font-size: 0.88em;
+            background: #1a1f2e; border-radius: 8px; overflow: hidden;
+            margin-bottom: 16px;
+        }
+        .provider-table th {
+            padding: 8px 12px; text-align: left; font-weight: 600; color: #06b6d4;
+            background: #252b3d; font-size: 0.9em;
+        }
+        .provider-table td { padding: 8px 12px; border-top: 1px solid #1e2436; }
+        .provider-table tr:first-child td { border-top: none; }
+        .provider-table .cheapest { color: #4ade80; font-weight: 700; }
 
         .breakdown-label {
             font-size: 0.8em; color: #a0a0a0; text-transform: uppercase;
             letter-spacing: 0.5px; font-weight: 600; margin-bottom: 8px;
         }
-        .breakdown-table {
-            width: 100%; border-collapse: collapse; font-size: 0.88em;
-            background: #1a1f2e; border-radius: 8px; overflow: hidden;
-            margin-bottom: 16px;
-        }
-        .breakdown-table th {
-            padding: 8px 12px; text-align: left; font-weight: 600; color: #06b6d4;
-            background: #252b3d; font-size: 0.9em;
-        }
-        .breakdown-table td { padding: 8px 12px; border-top: 1px solid #1e2436; }
 
         .timestamp-bar {
             color: #a0a0a0; font-size: 0.82em; text-align: right;
@@ -221,9 +256,21 @@
             text-align: center; color: #a0a0a0; padding: 60px 20px;
         }
 
+        .vram-tag {
+            display: inline-block;
+            background: rgba(6,182,212,0.1);
+            color: #67e8f9;
+            padding: 1px 8px;
+            border-radius: 10px;
+            font-size: 0.82em;
+            font-weight: 500;
+        }
+
         @media (max-width: 900px) {
             table { font-size: 0.82em; }
             .deals-grid { grid-template-columns: 1fr !important; }
+            .variant-row td { padding-left: 24px; }
+            .detail-content { padding-left: 24px; }
         }
     </style>
 </head>
@@ -236,14 +283,14 @@
     </nav>
 
     <header>
-        <h1>🖥️ GPU Rental Pricing</h1>
+        <h1>GPU Rental Pricing</h1>
         <p class="subtitle">Spot, on-demand, and reserved rates across all GPU rental providers</p>
     </header>
 
     <div class="stats">
         <div class="stat-card">
-            <div class="stat-number" id="stat-total">–</div>
-            <div class="stat-label">GPU Models</div>
+            <div class="stat-number" id="stat-classes">–</div>
+            <div class="stat-label">GPU Classes</div>
         </div>
         <div class="stat-card">
             <div class="stat-number" id="stat-providers">–</div>
@@ -262,7 +309,7 @@
     <div class="controls">
         <div class="control-group">
             <label>Search</label>
-            <input type="text" id="search" placeholder="e.g. RTX 4090, A100...">
+            <input type="text" id="search" placeholder="e.g. H100, A100, RTX 4090...">
         </div>
         <div class="control-group">
             <label>VRAM</label>
@@ -285,12 +332,12 @@
     <div class="timestamp-bar" id="timestamp"></div>
 
     <div class="tabs">
-        <button class="tab active" data-view="combined">All GPUs</button>
+        <button class="tab active" data-view="classes">By GPU Class</button>
         <button class="tab" data-view="deals">Best Deals</button>
     </div>
 
-    <div id="combined-view" class="view active">
-        <div id="combined-container">
+    <div id="classes-view" class="view active">
+        <div id="classes-container">
             <div class="no-data">Loading...</div>
         </div>
     </div>
@@ -301,7 +348,7 @@
 </div>
 
 <script>
-    const CHART_COLORS = ['#06b6d4','#4ade80','#f59e0b','#ef4444','#a855f7','#667eea','#f97316','#84cc16'];
+    const CHART_COLORS = ['#06b6d4','#4ade80','#f59e0b','#ef4444','#a855f7','#667eea','#f97316','#84cc16','#ec4899','#14b8a6'];
 
     // ── Provider badge colours ────────────────────────────────────────────────
     const PROVIDER_PALETTE = [
@@ -324,60 +371,37 @@
     }
     function badgeHtml(name) {
         const c = providerColor(name);
-        return `<span class="badge" style="background:${c.bg};color:${c.color};border-color:${c.border}">${escapeHtml(name)}</span>`;
+        return `<span class="badge" style="background:${c.bg};color:${c.color};border-color:${c.border}">${esc(name)}</span>`;
     }
 
     // ── Pricing tier definitions ─────────────────────────────────────────────
-    //
-    // Each pricing field from the API is mapped to one of three conceptual tiers:
-    //   spot     — interruptible / bid-based, lowest price, may be preempted
-    //   demand   — stable on-demand, pay-per-use, no preemption risk
-    //   reserved — always-on / guaranteed, typically highest price
-    //
-    // The UI surfaces these tiers with distinct colours so users can compare
-    // like-for-like across providers.
-
     const TIER_META = {
-        spot:     { label: 'Spot',     color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.35)',  desc: 'Interruptible — lowest cost, may be preempted'        },
-        demand:   { label: 'On-Demand', color: '#06b6d4', bg: 'rgba(6,182,212,0.12)',  border: 'rgba(6,182,212,0.35)',   desc: 'Stable, pay-per-use — no preemption risk'             },
-        reserved: { label: 'Reserved',  color: '#a855f7', bg: 'rgba(168,85,247,0.12)', border: 'rgba(168,85,247,0.35)', desc: 'Always-on, guaranteed availability — highest price'   },
+        spot:     { label: 'Spot',      color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.35)' },
+        demand:   { label: 'On-Demand', color: '#06b6d4', bg: 'rgba(6,182,212,0.12)',  border: 'rgba(6,182,212,0.35)' },
+        reserved: { label: 'Reserved',  color: '#a855f7', bg: 'rgba(168,85,247,0.12)', border: 'rgba(168,85,247,0.35)' },
     };
 
-    // Map each raw API field to its tier and a human label
     const FIELD_DEFS = [
-        // ── RunPod — uses provider-specific field names ─────────────────────
+        // RunPod
         { field: 'community_spot',      tier: 'spot',     label: 'Community Spot'      },
         { field: 'secure_spot',         tier: 'spot',     label: 'Secure Spot'         },
         { field: 'minimum_bid',         tier: 'spot',     label: 'Minimum Bid'         },
         { field: 'community_on_demand', tier: 'demand',   label: 'Community On-Demand' },
         { field: 'secure_on_demand',    tier: 'demand',   label: 'Secure On-Demand'    },
         { field: 'uninterruptable',     tier: 'reserved', label: 'Uninterruptable'     },
-
-        // ── Shared field names (Vast.ai, Lambda Labs, TensorDock, Vultr, Azure) ──
-        // spot / interruptible
+        // Shared (Vast.ai, Lambda Labs, TensorDock, Vultr, Azure, etc.)
         { field: 'spot_min',            tier: 'spot',     label: 'Spot Min'            },
         { field: 'spot_avg',            tier: 'spot',     label: 'Spot Avg'            },
         { field: 'rentable_min',        tier: 'spot',     label: 'Rentable Min'        },
-        // on-demand / stable
         { field: 'demand_min',          tier: 'demand',   label: 'On-Demand Min'       },
         { field: 'demand_avg',          tier: 'demand',   label: 'On-Demand Avg'       },
         { field: 'rentable_avg',        tier: 'demand',   label: 'Rentable Avg'        },
-        // overall market range
         { field: 'min',                 tier: 'spot',     label: 'Market Min'          },
         { field: 'avg',                 tier: 'demand',   label: 'Market Avg'          },
         { field: 'max',                 tier: 'reserved', label: 'Market Max'          },
-        // Lambda Labs full-instance price (shown in breakdown, not tier summary)
         { field: 'instance_price',      tier: 'demand',   label: 'Instance Price'      },
     ];
 
-    // Returns array of { field, label, price, tier } for all non-null prices
-    function getAllTierPrices(pricing) {
-        return FIELD_DEFS
-            .filter(d => pricing[d.field] != null && pricing[d.field] > 0)
-            .map(d => ({ ...d, price: +pricing[d.field] }));
-    }
-
-    // Returns { spot, demand, reserved } — each is the minimum price in that tier (or null)
     function getTierSummary(pricing) {
         const result = { spot: null, demand: null, reserved: null };
         for (const { field, tier } of FIELD_DEFS) {
@@ -389,35 +413,152 @@
         return result;
     }
 
-    // Average of the per-tier minimums that exist (spot, demand, reserved)
-    function getAvgPrice(pricing) {
-        const vals = Object.values(getTierSummary(pricing)).filter(v => v != null);
-        return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+    function getAllTierPrices(pricing) {
+        return FIELD_DEFS
+            .filter(d => pricing[d.field] != null && pricing[d.field] > 0)
+            .map(d => ({ ...d, price: +pricing[d.field] }));
     }
 
-    // Absolute cheapest price across all fields
     function getPriceMin(pricing) {
         const all = getAllTierPrices(pricing);
         return all.length ? Math.min(...all.map(t => t.price)) : null;
     }
-
-    // Absolute most expensive price across all fields
     function getPriceMax(pricing) {
         const all = getAllTierPrices(pricing);
         return all.length ? Math.max(...all.map(t => t.price)) : null;
     }
 
+    // ── GPU class parsing ────────────────────────────────────────────────────
+    //
+    // Normalises raw GPU names from different providers into a canonical
+    // { gpuClass, variant } so we can group the same chip together.
+
+    // Explicit overrides for names that regex can't handle cleanly.
+    // Maps a normalised lowercase prefix to { gpuClass, variantPrefix }.
+    const GPU_CLASS_OVERRIDES = [
+        // PRO 6000 MIG slices (no "RTX" prefix in some providers)
+        { match: 'pro 6000 mig',          gpuClass: 'RTX PRO 6000', variantPrefix: 'MIG' },
+        // TensorDock concatenated names
+        { match: 'geforcertx2060super',    gpuClass: 'RTX 2060',     variantPrefix: 'SUPER' },
+        { match: 'geforcertx',             gpuClass: null,            variantPrefix: null, parse: n => {
+            // "GEFORCERTX3090" → class "RTX 3090", "GEFORCERTX3080TI" → "RTX 3080 Ti"
+            const m = n.match(/GEFORCERTX(\d{4})(TI|SUPER)?$/i);
+            if (!m) return null;
+            const suffix = m[2] ? ' ' + m[2][0].toUpperCase() + m[2].slice(1).toLowerCase() : '';
+            return { gpuClass: 'RTX ' + m[1] + suffix, variant: null };
+        }},
+        { match: 'quadrortx',             gpuClass: null, variantPrefix: null, parse: n => {
+            const m = n.match(/QUADRORTX(\d+)/i);
+            return m ? { gpuClass: 'Quadro RTX ' + m[1], variant: null } : null;
+        }},
+        { match: 'rtx6000ada',            gpuClass: 'RTX 6000 Ada',  variantPrefix: null },
+        { match: 'rtxa',                  gpuClass: null, variantPrefix: null, parse: n => {
+            const m = n.match(/RTXA(\d+)/i);
+            return m ? { gpuClass: 'RTX A' + m[1], variant: null } : null;
+        }},
+    ];
+
+    function parseGpuClass(rawName) {
+        let name = rawName.trim();
+
+        // Check explicit overrides first (handles TensorDock concatenated names, MIG slices)
+        const nameLower = name.toLowerCase();
+        for (const ov of GPU_CLASS_OVERRIDES) {
+            if (nameLower.startsWith(ov.match) || nameLower === ov.match) {
+                if (ov.parse) {
+                    const result = ov.parse(name);
+                    if (result) return { gpuClass: result.gpuClass, variant: result.variant };
+                }
+                if (ov.gpuClass) {
+                    // Extract any remaining suffix as variant info
+                    const remainder = name.substring(name.toLowerCase().indexOf(ov.match) + ov.match.length).trim();
+                    const variantParts = [];
+                    if (ov.variantPrefix) variantParts.push(ov.variantPrefix);
+                    if (remainder) variantParts.push(remainder);
+                    return { gpuClass: ov.gpuClass, variant: variantParts.join(' ') || null };
+                }
+            }
+        }
+
+        // Strip common prefixes
+        name = name.replace(/^(NVIDIA|AMD|Intel)\s+/i, '');
+        name = name.replace(/^GeForce\s+/i, '');
+        name = name.replace(/\s+/g, ' ');
+
+        const variantParts = [];
+
+        // Form factor / workstation suffixes → variant
+        const formMatch = name.match(/\b(MaxQ|WK|WS|SFF|Blackwell|Hopper|Tensor)\b/i);
+        if (formMatch) {
+            variantParts.push(formMatch[1]);
+            name = name.replace(formMatch[0], '').trim();
+        }
+
+        // MIG slice pattern: "MIG 24GB", "MIG 48GB"
+        const migMatch = name.match(/\bMIG\s*(\d+\s*GB)?/i);
+        if (migMatch) {
+            variantParts.push(migMatch[0].trim());
+            name = name.replace(migMatch[0], '').trim();
+        }
+
+        // Interface: SXM, SXM4, SXM5, PCIe, NVLink, HBM2e, HBM3
+        const ifaceMatch = name.match(/\b(SXM\d*|PCIe?|NVLink|HBM\d?\w*)\b/i);
+        if (ifaceMatch) {
+            variantParts.push(ifaceMatch[1].toUpperCase().replace('PCIE', 'PCIe'));
+            name = name.replace(ifaceMatch[0], '').trim();
+        }
+
+        // Memory spec: "80GB", "40 GB"
+        const memMatch = name.match(/\b(\d+)\s*GB\b/i);
+        if (memMatch) {
+            variantParts.push(memMatch[1] + 'GB');
+            name = name.replace(memMatch[0], '').trim();
+        }
+
+        // Generation suffix that stays in the class name: Ada, SUPER, Ti, S (single letter)
+        // "RTX 4080 SUPER" → class "RTX 4080 SUPER" (SUPER is a different GPU)
+        // "RTX PRO 6000 S" → class "RTX PRO 6000", variant "S"
+        // BUT "RTX 4070S Ti" → class "RTX 4070S Ti" (Vast.ai shorthand for SUPER)
+        const trailingSuffix = name.match(/\s+(S|WS|WK)$/i);
+        if (trailingSuffix) {
+            variantParts.unshift(trailingSuffix[1].toUpperCase());
+            name = name.replace(trailingSuffix[0], '').trim();
+        }
+
+        // Clean up
+        name = name.replace(/\s*[-–]\s*$/, '').trim();
+        name = name.replace(/\s+/g, ' ');
+
+        // Normalise casing: "RTX Pro 6000" → "RTX PRO 6000"
+        name = name.replace(/\bPro\b/g, 'PRO');
+        // "Ti" consistency
+        name = name.replace(/\bti\b/gi, 'Ti');
+
+        return {
+            gpuClass: name || rawName,
+            variant: variantParts.length ? variantParts.join(' ') : null,
+        };
+    }
+
     // ── State ────────────────────────────────────────────────────────────────
 
-    let gpuData     = null;
-    let filteredData = [];
+    let gpuData = null;
     let currentVram = 'all';
     let currentSearch = '';
     let currentProvider = 'all';
-    let currentView = 'combined';
-    let sortColumn = 'avgPrice';
+    let currentView = 'classes';
+    let sortColumn = 'cheapest';
     let sortDirection = 'asc';
-    let expandedHistories = new Map();   // safeId → Chart instance
+    let expandedClasses = new Set();
+    let expandedVariants = new Set();    // variantId
+    let chartInstances = new Map();
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    function fmtP(p) { return p == null ? '–' : `$${(+p).toFixed(3)}/hr`; }
+    function fmtPHtml(p) { return p == null ? '–' : `<span class="price">${fmtP(p)}</span>`; }
+    function esc(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+    function safeId(s) { return s.replace(/[^a-zA-Z0-9]/g, '_'); }
 
     // ── Data loading ─────────────────────────────────────────────────────────
 
@@ -428,58 +569,22 @@
             gpuData = await r.json();
             updateStats();
             updateTimestamp();
-            applyFilters();
+            populateProviderChips();
+            renderCurrentView();
         } catch (e) {
-            document.getElementById('combined-container').innerHTML =
+            document.getElementById('classes-container').innerHTML =
                 '<div class="no-data">GPU pricing data not available yet — it will appear after the first daily Lambda run with GPU API keys configured.<br><br>Run <code>make configure-gpu</code> to set API keys, then <code>make invoke</code> to trigger collection.</div>';
         }
     }
 
-    // Returns all provider keys whose value contains a `gpus` array
     function getProviderKeys() {
         if (!gpuData) return [];
         return Object.keys(gpuData).filter(k => Array.isArray(gpuData[k]?.gpus));
     }
 
-    function updateStats() {
-        if (!gpuData) return;
-        const providerKeys = getProviderKeys();
-        const allGpus = buildCombined();
-        const uniqueModels = new Set(allGpus.map(g => normalizeGpuName(g.name))).size;
-        const spotPrices = allGpus.map(g => g.tiers.spot).filter(p => p != null && p > 0);
-        const cheapest = spotPrices.length ? `$${Math.min(...spotPrices).toFixed(3)}` : '–';
+    // ── Build flat GPU list from all providers ───────────────────────────────
 
-        document.getElementById('stat-total').textContent = uniqueModels;
-        document.getElementById('stat-providers').textContent = providerKeys.length;
-        document.getElementById('stat-listings').textContent = allGpus.length;
-        document.getElementById('stat-cheapest').textContent = cheapest;
-
-        // Populate provider filter chips dynamically
-        const chipsEl = document.getElementById('providerChips');
-        const existing = new Set([...chipsEl.querySelectorAll('.chip')].map(c => c.dataset.provider));
-        providerKeys.forEach(key => {
-            if (existing.has(key)) return;
-            const chip = document.createElement('div');
-            chip.className = 'chip';
-            chip.dataset.provider = key;
-            chip.textContent = gpuData[key].name || key;
-            chipsEl.appendChild(chip);
-        });
-    }
-
-    function updateTimestamp() {
-        if (!gpuData?.generated_at) return;
-        const d = new Date(gpuData.generated_at);
-        document.getElementById('timestamp').textContent = `Last updated: ${d.toLocaleString()}`;
-    }
-
-    function normalizeGpuName(n) {
-        return n.toLowerCase().replace(/[\s\-_]+/g, '').replace(/nvidia|amd/g, '');
-    }
-
-    // ── Build combined GPU list from all providers ────────────────────────────
-
-    function buildCombined() {
+    function buildFlat() {
         const out = [];
         getProviderKeys().forEach(key => {
             const provData = gpuData[key];
@@ -487,16 +592,19 @@
             (provData.gpus || []).forEach(g => {
                 const pricing = g.pricing || {};
                 const tiers = getTierSummary(pricing);
+                const { gpuClass, variant } = parseGpuClass(g.name);
+                const vram = Math.round(g.vram_gb || g.vram || 0) || 0;
                 out.push({
                     provider: key,
                     providerLabel,
-                    name: g.name,
-                    vram: Math.round(g.vram_gb || g.vram || 0) || 0,
+                    rawName: g.name,
+                    gpuClass,
+                    variant,
+                    vram,
                     pricing,
                     tiers,
-                    avgPrice:  getAvgPrice(pricing),
-                    priceMin:  getPriceMin(pricing),
-                    priceMax:  getPriceMax(pricing),
+                    priceMin: getPriceMin(pricing),
+                    priceMax: getPriceMax(pricing),
                     availability: g.available !== undefined
                         ? (g.available ? 'Available' : 'Unavailable')
                         : (g.rentable_offers != null
@@ -509,12 +617,60 @@
         return out;
     }
 
+    // ── Build class hierarchy ────────────────────────────────────────────────
+    //
+    // Returns: [ { className, variants: [ { variantKey, vram, entries: [...] } ] } ]
+
+    function buildHierarchy(flatList) {
+        const classMap = {};
+
+        flatList.forEach(gpu => {
+            const cls = gpu.gpuClass;
+            if (!classMap[cls]) classMap[cls] = {};
+
+            // Variant key combines interface variant with VRAM
+            const vk = gpu.variant
+                ? `${gpu.variant}${gpu.vram ? ' ' + gpu.vram + 'GB' : ''}`
+                : (gpu.vram ? gpu.vram + 'GB' : 'Standard');
+            // Deduplicate the "80GB 80GB" case
+            const variantKey = vk.replace(/(\d+GB)\s+\1/g, '$1');
+
+            if (!classMap[cls][variantKey]) classMap[cls][variantKey] = [];
+            classMap[cls][variantKey].push(gpu);
+        });
+
+        // Convert to sorted array
+        const classes = Object.entries(classMap).map(([className, variants]) => {
+            const variantArr = Object.entries(variants).map(([variantKey, entries]) => {
+                const vrams = entries.map(e => e.vram).filter(v => v > 0);
+                const maxVram = vrams.length ? Math.max(...vrams) : 0;
+                return { variantKey, vram: maxVram, entries };
+            });
+            // Sort variants: highest VRAM first
+            variantArr.sort((a, b) => b.vram - a.vram);
+            return { className, variants: variantArr };
+        });
+
+        // Sort classes by name, putting well-known GPUs first
+        const GPU_ORDER = ['H200','H100','A100','L40S','L40','L4','A10G','A10','RTX 6000','RTX 5090','RTX 5080','RTX 4090','RTX 4080','RTX 3090','RTX 3080','RTX A6000','RTX A5000','RTX A4000','V100','T4','MI300X','MI250X','MI210'];
+        classes.sort((a, b) => {
+            const ai = GPU_ORDER.findIndex(g => a.className.includes(g));
+            const bi = GPU_ORDER.findIndex(g => b.className.includes(g));
+            if (ai >= 0 && bi >= 0) return ai - bi;
+            if (ai >= 0) return -1;
+            if (bi >= 0) return 1;
+            return a.className.localeCompare(b.className);
+        });
+
+        return classes;
+    }
+
     // ── Filtering ────────────────────────────────────────────────────────────
 
-    function applyFilters() {
-        const all = buildCombined();
-        filteredData = all.filter(gpu => {
-            if (currentSearch && !gpu.name.toLowerCase().includes(currentSearch)) return false;
+    function applyFilters(flatList) {
+        return flatList.filter(gpu => {
+            if (currentSearch && !gpu.rawName.toLowerCase().includes(currentSearch)
+                && !gpu.gpuClass.toLowerCase().includes(currentSearch)) return false;
             if (currentProvider !== 'all' && gpu.provider !== currentProvider) return false;
             if (currentVram !== 'all') {
                 const v = gpu.vram || 0;
@@ -525,42 +681,45 @@
             }
             return true;
         });
-        renderCurrentView();
+    }
+
+    // ── Stats + UI setup ─────────────────────────────────────────────────────
+
+    function updateStats() {
+        const flat = buildFlat();
+        const classes = new Set(flat.map(g => g.gpuClass));
+        const spotPrices = flat.map(g => g.tiers.spot).filter(p => p != null && p > 0);
+        const cheapest = spotPrices.length ? `$${Math.min(...spotPrices).toFixed(3)}` : '–';
+
+        document.getElementById('stat-classes').textContent = classes.size;
+        document.getElementById('stat-providers').textContent = getProviderKeys().length;
+        document.getElementById('stat-listings').textContent = flat.length;
+        document.getElementById('stat-cheapest').textContent = cheapest;
+    }
+
+    function updateTimestamp() {
+        if (!gpuData?.generated_at) return;
+        const d = new Date(gpuData.generated_at);
+        document.getElementById('timestamp').textContent = `Last updated: ${d.toLocaleString()}`;
+    }
+
+    function populateProviderChips() {
+        const chipsEl = document.getElementById('providerChips');
+        getProviderKeys().forEach(key => {
+            const chip = document.createElement('div');
+            chip.className = 'chip';
+            chip.dataset.provider = key;
+            chip.textContent = gpuData[key].name || key;
+            chipsEl.appendChild(chip);
+        });
     }
 
     function renderCurrentView() {
-        if (currentView === 'combined') renderCombined();
-        if (currentView === 'deals')    renderDeals();
-    }
-
-    // ── Formatting helpers ───────────────────────────────────────────────────
-
-    function fmtP(p) {
-        if (p == null) return '–';
-        return `$${(+p).toFixed(3)}/hr`;
-    }
-    function fmtPHtml(p) {
-        if (p == null) return '–';
-        return `<span class="price">${fmtP(p)}</span>`;
-    }
-    function escapeHtml(t) {
-        const d = document.createElement('div'); d.textContent = t; return d.innerHTML;
+        if (currentView === 'classes') renderClasses();
+        if (currentView === 'deals') renderDeals();
     }
 
     // ── Sorting ──────────────────────────────────────────────────────────────
-
-    function sortData(data) {
-        const dir = sortDirection === 'asc' ? 1 : -1;
-        return [...data].sort((a, b) => {
-            switch (sortColumn) {
-                case 'name':     return dir * a.name.localeCompare(b.name);
-                case 'provider': return dir * a.provider.localeCompare(b.provider);
-                case 'vram':     return dir * ((a.vram || 0) - (b.vram || 0));
-                case 'avgPrice': return dir * ((a.avgPrice ?? 9999) - (b.avgPrice ?? 9999));
-                default:         return 0;
-            }
-        });
-    }
 
     function thHtml(label, col) {
         const cls = sortColumn === col ? `sortable sort-${sortDirection}` : 'sortable';
@@ -570,152 +729,454 @@
     function setSort(col) {
         sortDirection = (sortColumn === col && sortDirection === 'asc') ? 'desc' : 'asc';
         sortColumn = col;
-        renderCombined();
+        renderClasses();
     }
 
-    // ── Tier badge HTML ──────────────────────────────────────────────────────
+    // ── Class-based main view ────────────────────────────────────────────────
 
-    function tierBadgeHtml(tierKey, price) {
-        const m = TIER_META[tierKey];
-        return `<span class="tier-badge" title="${m.desc}" style="background:${m.bg};color:${m.color};border-color:${m.border}">${m.label} ${fmtP(price)}</span>`;
-    }
+    function renderClasses() {
+        // Destroy any open charts before rebuilding DOM
+        for (const [key, chart] of chartInstances) { chart.destroy(); }
+        chartInstances.clear();
 
-    function tierBadgesHtml(tiers) {
-        return Object.entries(tiers)
-            .filter(([, p]) => p != null)
-            .map(([k, p]) => tierBadgeHtml(k, p))
-            .join('') || '<span style="color:#6b7280">–</span>';
-    }
+        const flat = buildFlat();
+        const filtered = applyFilters(flat);
+        const hierarchy = buildHierarchy(filtered);
 
-    // ── Combined (main) view ─────────────────────────────────────────────────
-
-    function renderCombined() {
-        const sorted = sortData(filteredData);
-        if (!sorted.length) {
-            document.getElementById('combined-container').innerHTML =
+        if (!hierarchy.length) {
+            document.getElementById('classes-container').innerHTML =
                 '<div class="no-data">No GPUs match the current filters.</div>';
             return;
         }
 
-        const rows = sorted.map(gpu => {
-            const safeId = (gpu.provider + '_' + gpu.name).replace(/[^a-zA-Z0-9]/g, '_');
+        // Sort classes by the selected column
+        hierarchy.forEach(cls => {
+            cls._cheapest = Math.min(...cls.variants.flatMap(v => v.entries.map(e => e.priceMin)).filter(p => p != null));
+            cls._maxVram = Math.max(...cls.variants.map(v => v.vram), 0);
+            cls._providerCount = new Set(cls.variants.flatMap(v => v.entries.map(e => e.providerLabel))).size;
+            cls._variantCount = cls.variants.length;
+            cls._listingCount = cls.variants.reduce((sum, v) => sum + v.entries.length, 0);
+        });
 
-            // Avg price with min–max range below
-            let avgHtml = '–';
-            if (gpu.avgPrice != null) {
-                const hasRange = gpu.priceMin != null && gpu.priceMax != null
-                              && gpu.priceMax - gpu.priceMin > 0.0001;
-                avgHtml = `<span class="price">${fmtP(gpu.avgPrice)}</span>`
-                    + (hasRange
-                        ? `<div class="price-range">${fmtP(gpu.priceMin)} – ${fmtP(gpu.priceMax)}</div>`
-                        : '');
+        const dir = sortDirection === 'asc' ? 1 : -1;
+        hierarchy.sort((a, b) => {
+            switch (sortColumn) {
+                case 'name': return dir * a.className.localeCompare(b.className);
+                case 'vram': return dir * (a._maxVram - b._maxVram);
+                case 'providers': return dir * (a._providerCount - b._providerCount);
+                case 'cheapest': return dir * ((a._cheapest ?? 9999) - (b._cheapest ?? 9999));
+                default: return 0;
             }
+        });
 
-            return `
-                <tr class="gpu-row" onclick="toggleHistory('${safeId}','${escapeHtml(gpu.name)}','${gpu.provider}')" title="Click to see pricing breakdown and history">
+        let rows = '';
+        hierarchy.forEach(cls => {
+            const clsId = safeId(cls.className);
+            const isOpen = expandedClasses.has(cls.className);
+            const providerNames = [...new Set(cls.variants.flatMap(v => v.entries.map(e => e.providerLabel)))];
+            const cheapest = cls._cheapest < 9999 ? cls._cheapest : null;
+            const maxPrice = Math.max(...cls.variants.flatMap(v => v.entries.map(e => e.priceMax)).filter(p => p != null));
+            const hasRange = cheapest != null && maxPrice != null && maxPrice - cheapest > 0.001;
+
+            rows += `
+                <tr class="class-row" onclick="toggleClass('${esc(cls.className)}')">
                     <td>
-                        <span class="gpu-chevron" id="chev-${safeId}">&#9654;</span>
-                        <strong>${escapeHtml(gpu.name)}</strong>
+                        <span class="chevron ${isOpen ? 'open' : ''}" id="cls-chev-${clsId}">&#9654;</span>
+                        <span class="class-name">${esc(cls.className)}</span>
+                        <span class="variant-count">${cls._variantCount} variant${cls._variantCount !== 1 ? 's' : ''}, ${cls._listingCount} listing${cls._listingCount !== 1 ? 's' : ''}</span>
                     </td>
-                    <td>${badgeHtml(gpu.providerLabel)}</td>
-                    <td>${gpu.vram ? gpu.vram + ' GB' : '–'}</td>
-                    <td>${avgHtml}</td>
-                    <td>${tierBadgesHtml(gpu.tiers)}</td>
-                    <td style="color:#a0a0a0;font-size:0.9em">${gpu.availability}</td>
-                </tr>
-                <tr class="gpu-history-row">
-                    <td colspan="6">
-                        <div class="gpu-history-content" id="hist-${safeId}">
-                            <div style="text-align:center;color:#a0a0a0;padding:16px;font-size:0.85em">Loading…</div>
-                        </div>
+                    <td>${cls._maxVram ? `<span class="vram-tag">${cls._maxVram} GB</span>` : '–'}</td>
+                    <td>${providerNames.slice(0, 4).map(n => badgeHtml(n)).join('')}${providerNames.length > 4 ? ` <span style="color:#6b7280;font-size:0.8em">+${providerNames.length - 4}</span>` : ''}</td>
+                    <td>
+                        ${cheapest != null ? `<span class="price">${fmtP(cheapest)}</span>` : '–'}
+                        ${hasRange ? `<div class="price-range">up to ${fmtP(maxPrice)}</div>` : ''}
                     </td>
                 </tr>
             `;
-        }).join('');
 
-        document.getElementById('combined-container').innerHTML = `
+            if (isOpen) {
+                cls.variants.forEach(v => {
+                    const vId = safeId(cls.className + '_' + v.variantKey);
+                    const isVarOpen = expandedVariants.has(vId);
+                    const vCheapest = Math.min(...v.entries.map(e => e.priceMin).filter(p => p != null));
+                    const vMax = Math.max(...v.entries.map(e => e.priceMax).filter(p => p != null));
+                    const vHasRange = vCheapest < 9999 && vMax > 0 && vMax - vCheapest > 0.001;
+
+                    rows += `
+                        <tr class="variant-row" onclick="event.stopPropagation(); toggleVariant('${vId}', '${esc(cls.className)}', '${esc(v.variantKey)}')">
+                            <td>
+                                <span class="chevron ${isVarOpen ? 'open' : ''}" id="var-chev-${vId}">&#9654;</span>
+                                ${esc(v.variantKey)}
+                            </td>
+                            <td>${v.vram ? `<span class="vram-tag">${v.vram} GB</span>` : '–'}</td>
+                            <td>${v.entries.map(e => badgeHtml(e.providerLabel)).join('')}</td>
+                            <td>
+                                ${vCheapest < 9999 ? `<span class="price">${fmtP(vCheapest)}</span>` : '–'}
+                                ${vHasRange ? `<div class="price-range">up to ${fmtP(vMax)}</div>` : ''}
+                            </td>
+                        </tr>
+                        <tr class="detail-row">
+                            <td colspan="4">
+                                <div class="detail-content ${isVarOpen ? 'open' : ''}" id="detail-${vId}"></div>
+                            </td>
+                        </tr>
+                    `;
+
+                    if (isVarOpen) {
+                        // Render detail content after table is in DOM
+                        requestAnimationFrame(() => renderVariantDetail(vId, v.entries));
+                    }
+                });
+            }
+        });
+
+        document.getElementById('classes-container').innerHTML = `
             <table>
                 <thead>
                     <tr>
-                        ${thHtml('GPU Model', 'name')}
-                        ${thHtml('Provider', 'provider')}
+                        ${thHtml('GPU Class', 'name')}
                         ${thHtml('VRAM', 'vram')}
-                        ${thHtml('Avg Price', 'avgPrice')}
-                        <th>Pricing Tiers</th>
-                        <th>Availability</th>
+                        ${thHtml('Providers', 'providers')}
+                        ${thHtml('Price Range', 'cheapest')}
                     </tr>
                 </thead>
                 <tbody>${rows}</tbody>
             </table>
             <div style="margin-top:10px;font-size:0.8em;color:#6b7280;text-align:right">
-                Avg Price = mean of available tier minimums (Spot / On-Demand / Reserved). Range shows cheapest–priciest individual tier. Click any row for full breakdown.
+                Click a GPU class to see variants (SXM/PCIe, memory sizes). Click a variant to compare provider pricing and view price history.
             </div>
         `;
+
+        // Re-render any open variant details
+        hierarchy.forEach(cls => {
+            if (!expandedClasses.has(cls.className)) return;
+            cls.variants.forEach(v => {
+                const vId = safeId(cls.className + '_' + v.variantKey);
+                if (expandedVariants.has(vId)) {
+                    renderVariantDetail(vId, v.entries);
+                }
+            });
+        });
+    }
+
+    // ── Toggle class expansion ───────────────────────────────────────────────
+
+    function toggleClass(className) {
+        if (expandedClasses.has(className)) {
+            expandedClasses.delete(className);
+        } else {
+            expandedClasses.add(className);
+        }
+        renderClasses();
+    }
+
+    // ── Toggle variant expansion ─────────────────────────────────────────────
+
+    function destroyChartsFor(vId) {
+        for (const suffix of ['_bar', '_line']) {
+            const key = vId + suffix;
+            if (chartInstances.has(key)) {
+                chartInstances.get(key).destroy();
+                chartInstances.delete(key);
+            }
+        }
+    }
+
+    function toggleVariant(vId, className, variantKey) {
+        if (expandedVariants.has(vId)) {
+            destroyChartsFor(vId);
+            expandedVariants.delete(vId);
+        } else {
+            expandedVariants.add(vId);
+        }
+        renderClasses();
+    }
+
+    // ── Render variant detail: provider comparison + chart ────────────────────
+
+    function renderVariantDetail(vId, entries) {
+        const el = document.getElementById(`detail-${vId}`);
+        if (!el) return;
+
+        // Sort entries by cheapest price
+        const sorted = [...entries].sort((a, b) => (a.priceMin ?? 9999) - (b.priceMin ?? 9999));
+        const cheapestPrice = sorted[0]?.priceMin;
+
+        // Provider comparison table
+        const providerRows = sorted.map(e => {
+            const t = e.tiers;
+            const isCheapest = e.priceMin === cheapestPrice && sorted.length > 1;
+            const spotCls = t.spot != null && t.spot === cheapestPrice ? 'cheapest' : '';
+            const demandCls = t.demand != null && t.demand === cheapestPrice ? 'cheapest' : '';
+            return `<tr>
+                <td>${badgeHtml(e.providerLabel)}${isCheapest ? ' <span style="color:#4ade80;font-size:0.75em">CHEAPEST</span>' : ''}</td>
+                <td class="${spotCls}" style="font-family:monospace">${t.spot != null ? fmtP(t.spot) : '–'}</td>
+                <td class="${demandCls}" style="font-family:monospace">${t.demand != null ? fmtP(t.demand) : '–'}</td>
+                <td style="font-family:monospace">${t.reserved != null ? fmtP(t.reserved) : '–'}</td>
+                <td style="color:#a0a0a0;font-size:0.9em">${e.availability}</td>
+            </tr>`;
+        }).join('');
+
+        el.innerHTML = `
+            <div class="breakdown-label">Provider Comparison</div>
+            <table class="provider-table">
+                <thead><tr>
+                    <th>Provider</th>
+                    <th style="color:${TIER_META.spot.color}">Spot</th>
+                    <th style="color:${TIER_META.demand.color}">On-Demand</th>
+                    <th style="color:${TIER_META.reserved.color}">Reserved</th>
+                    <th>Availability</th>
+                </tr></thead>
+                <tbody>${providerRows}</tbody>
+            </table>
+            <div id="chart-wrap-${vId}">
+                <div style="text-align:center;color:#a0a0a0;padding:12px;font-size:0.85em">Loading price history...</div>
+            </div>
+        `;
+
+        // Load history charts for all providers
+        loadVariantHistory(vId, entries);
+    }
+
+    // ── Load and render price chart across all providers ────────────────────
+    //
+    // Strategy: always show a bar chart of current on-demand prices across
+    // all providers for instant visual comparison. If any provider has
+    // meaningful price movement in its history, also show a line chart.
+
+    async function loadVariantHistory(vId, entries) {
+        const chartWrap = document.getElementById(`chart-wrap-${vId}`);
+        if (!chartWrap) return;
+
+        // ── 1. Current price bar chart (always shown) ────────────────────────
+        const barEntries = entries
+            .map(e => {
+                const t = e.tiers;
+                return {
+                    provider: e.providerLabel,
+                    spot: t.spot,
+                    demand: t.demand,
+                    reserved: t.reserved,
+                };
+            })
+            .sort((a, b) => ((a.demand ?? a.spot ?? a.reserved ?? 999) - (b.demand ?? b.spot ?? b.reserved ?? 999)));
+
+        const barLabels = barEntries.map(e => e.provider);
+        const barDatasets = [];
+        if (barEntries.some(e => e.spot != null))
+            barDatasets.push({ label: 'Spot', data: barEntries.map(e => e.spot), backgroundColor: TIER_META.spot.color + '99', borderColor: TIER_META.spot.color, borderWidth: 1 });
+        if (barEntries.some(e => e.demand != null))
+            barDatasets.push({ label: 'On-Demand', data: barEntries.map(e => e.demand), backgroundColor: TIER_META.demand.color + '99', borderColor: TIER_META.demand.color, borderWidth: 1 });
+        if (barEntries.some(e => e.reserved != null))
+            barDatasets.push({ label: 'Reserved', data: barEntries.map(e => e.reserved), backgroundColor: TIER_META.reserved.color + '99', borderColor: TIER_META.reserved.color, borderWidth: 1 });
+
+        let barHtml = '';
+        if (barDatasets.length && barLabels.length > 1) {
+            barHtml = `
+                <div class="breakdown-label" style="margin-top:8px">Current Pricing — Provider Comparison</div>
+                <div style="height:${Math.max(160, barLabels.length * 40 + 60)}px"><canvas id="bar-${vId}"></canvas></div>
+            `;
+        }
+
+        // ── 2. Historical line chart (only if data has movement) ─────────────
+        const LEGACY_PROVIDERS = new Set(['runpod']);
+        const fetchedPaths = new Set();  // dedupe shared paths (runpod/vast)
+
+        const historyPromises = entries.map(async (entry) => {
+            const safeName = entry.rawName.replace(/[^a-zA-Z0-9]/g, '_');
+            const histPath = LEGACY_PROVIDERS.has(entry.provider)
+                ? `rollups/gpu/history/${safeName}.json`
+                : `rollups/gpu/history/${entry.provider}/${safeName}.json`;
+
+            if (fetchedPaths.has(histPath)) return null;
+            fetchedPaths.add(histPath);
+
+            try {
+                const r = await fetch(histPath);
+                if (!r.ok) return null;
+                const data = await r.json();
+                if (!data.history || data.history.length < 2) return null;
+                const prov = data.history[0]?.provider;
+                const label = prov ? (gpuData[prov]?.name || prov) : entry.providerLabel;
+                return { provider: label, history: data.history };
+            } catch { return null; }
+        });
+
+        const results = (await Promise.all(historyPromises)).filter(Boolean);
+
+        // Check if any history has meaningful price movement (>2% range)
+        const PRICE_FIELDS = ['demand_min', 'demand_avg', 'avg', 'secure_on_demand', 'community_on_demand', 'min', 'spot_min', 'spot_avg'];
+        let hasMovement = false;
+        const lineDatasets = [];
+        const allDates = new Set();
+        let lineColorIdx = 0;
+
+        results.forEach(r => {
+            r.history.forEach(h => allDates.add(h.date));
+
+            let bestField = null;
+            for (const f of PRICE_FIELDS) {
+                if (r.history.some(h => h[f] != null && h[f] > 0)) { bestField = f; break; }
+            }
+            if (!bestField) return;
+
+            const vals = r.history.map(h => h[bestField]).filter(v => v != null && v > 0);
+            if (vals.length < 2) return;
+            const min = Math.min(...vals), max = Math.max(...vals);
+            const range = min > 0 ? (max - min) / min : 0;
+            if (range > 0.02) hasMovement = true;
+
+            const dateMap = {};
+            r.history.forEach(h => { dateMap[h.date] = h[bestField]; });
+
+            const color = CHART_COLORS[lineColorIdx % CHART_COLORS.length];
+            lineColorIdx++;
+            lineDatasets.push({
+                label: r.provider,
+                data: null,  // filled after dates are sorted
+                _dateMap: dateMap,
+                borderColor: color,
+                backgroundColor: color + '22',
+                tension: 0.3, fill: false, pointRadius: 3, spanGaps: true,
+            });
+        });
+
+        const sortedDates = [...allDates].sort();
+        lineDatasets.forEach(ds => {
+            ds.data = sortedDates.map(d => ds._dateMap[d] != null ? +ds._dateMap[d].toFixed(4) : null);
+            delete ds._dateMap;
+        });
+
+        let lineHtml = '';
+        if (hasMovement && lineDatasets.length) {
+            lineHtml = `
+                <div class="breakdown-label" style="margin-top:12px">Price History</div>
+                <div style="height:220px"><canvas id="line-${vId}"></canvas></div>
+            `;
+        } else if (results.length && !hasMovement) {
+            lineHtml = `<div style="text-align:center;color:#6b7280;padding:8px 0;font-size:0.82em">Price history is flat — no significant movement in the collection period.</div>`;
+        }
+
+        chartWrap.innerHTML = barHtml + lineHtml;
+        if (!barHtml && !lineHtml) {
+            chartWrap.innerHTML = '<div style="text-align:center;color:#a0a0a0;padding:12px;font-size:0.85em">No price history yet — builds up daily.</div>';
+            return;
+        }
+
+        // Render bar chart
+        const barCanvas = document.getElementById(`bar-${vId}`);
+        if (barCanvas) {
+            const barChart = new Chart(barCanvas.getContext('2d'), {
+                type: 'bar',
+                data: { labels: barLabels, datasets: barDatasets },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: {
+                        legend: { labels: { color: '#e0e0e0', boxWidth: 10, font: { size: 11 } } },
+                        tooltip: { callbacks: { label: c => `${c.dataset.label}: $${c.parsed.x?.toFixed(3) ?? 'N/A'}/hr` } },
+                    },
+                    scales: {
+                        x: { ticks: { color: '#a0a0a0', callback: v => `$${v.toFixed(2)}` }, grid: { color: '#2a2f3e' } },
+                        y: { ticks: { color: '#e0e0e0', font: { size: 11 } }, grid: { display: false } },
+                    },
+                },
+            });
+            chartInstances.set(vId + '_bar', barChart);
+        }
+
+        // Render line chart (only if meaningful movement)
+        const lineCanvas = document.getElementById(`line-${vId}`);
+        if (lineCanvas && hasMovement) {
+            const lineChart = new Chart(lineCanvas.getContext('2d'), {
+                type: 'line',
+                data: { labels: sortedDates, datasets: lineDatasets },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { labels: { color: '#e0e0e0', boxWidth: 10, font: { size: 11 } } },
+                        tooltip: { callbacks: { label: c => `${c.dataset.label}: ${c.parsed.y != null ? '$' + c.parsed.y.toFixed(4) + '/hr' : 'N/A'}` } },
+                    },
+                    scales: {
+                        x: { ticks: { color: '#a0a0a0', maxTicksLimit: 10 }, grid: { color: '#2a2f3e' } },
+                        y: { ticks: { color: '#a0a0a0', callback: v => `$${v.toFixed(3)}` }, grid: { color: '#2a2f3e' } },
+                    },
+                },
+            });
+            chartInstances.set(vId + '_line', lineChart);
+        }
     }
 
     // ── Best Deals view ──────────────────────────────────────────────────────
 
     function renderDeals() {
-        const allData = buildCombined();
+        const flat = buildFlat();
+        const filtered = applyFilters(flat);
 
-        // Section 1: price spread for same GPU across multiple providers (avg price)
-        const byModel = {};
-        allData.forEach(g => {
-            const key = normalizeGpuName(g.name);
-            if (!byModel[key]) byModel[key] = { name: g.name, vram: g.vram, entries: [] };
-            if (g.avgPrice != null) byModel[key].entries.push(g);
+        // Section 1: price spread for same GPU class across multiple providers
+        const byClass = {};
+        filtered.forEach(g => {
+            if (!byClass[g.gpuClass]) byClass[g.gpuClass] = [];
+            if (g.priceMin != null) byClass[g.gpuClass].push(g);
         });
-        const spreads = Object.values(byModel)
-            .filter(m => m.entries.length >= 2)
-            .map(m => {
-                const s = [...m.entries].sort((a, b) => a.avgPrice - b.avgPrice);
+
+        const spreads = Object.entries(byClass)
+            .filter(([, entries]) => {
+                const providers = new Set(entries.map(e => e.provider));
+                return providers.size >= 2;
+            })
+            .map(([cls, entries]) => {
+                const sorted = [...entries].sort((a, b) => a.priceMin - b.priceMin);
+                const cheapest = sorted[0];
+                const priciest = sorted[sorted.length - 1];
                 return {
-                    name: m.name, vram: m.vram,
-                    cheapest: s[0], priciest: s[s.length - 1],
-                    spread: Math.round((s[s.length - 1].avgPrice - s[0].avgPrice) / s[0].avgPrice * 100),
-                    providerCount: m.entries.length,
+                    name: cls,
+                    vram: Math.max(...entries.map(e => e.vram)),
+                    cheapest, priciest,
+                    spread: Math.round((priciest.priceMin - cheapest.priceMin) / cheapest.priceMin * 100),
+                    providerCount: new Set(entries.map(e => e.provider)).size,
                 };
             })
             .filter(s => s.spread > 0)
             .sort((a, b) => b.spread - a.spread);
 
-        // Section 2: spot vs on-demand savings for the same GPU+provider
-        const spotSavings = allData
+        // Section 2: spot vs on-demand savings
+        const spotSavings = filtered
             .filter(g => g.tiers.spot != null && g.tiers.demand != null)
             .map(g => ({
                 ...g,
-                saving:     g.tiers.demand - g.tiers.spot,
-                savingPct:  Math.round((g.tiers.demand - g.tiers.spot) / g.tiers.demand * 100),
+                saving: g.tiers.demand - g.tiers.spot,
+                savingPct: Math.round((g.tiers.demand - g.tiers.spot) / g.tiers.demand * 100),
             }))
             .filter(g => g.saving > 0.0001)
             .sort((a, b) => b.savingPct - a.savingPct);
 
-        // Section 3a: cheapest spot
-        const cheapestSpot = [...allData]
+        // Section 3: cheapest spot + on-demand
+        const cheapestSpot = [...filtered]
             .filter(g => g.tiers.spot != null)
             .sort((a, b) => a.tiers.spot - b.tiers.spot)
             .slice(0, 10);
 
-        // Section 3b: cheapest on-demand
-        const cheapestOD = [...allData]
+        const cheapestOD = [...filtered]
             .filter(g => g.tiers.demand != null)
             .sort((a, b) => a.tiers.demand - b.tiers.demand)
             .slice(0, 10);
 
         const spreadRows = spreads.slice(0, 15).map(s => `
             <tr>
-                <td><strong>${escapeHtml(s.name)}</strong></td>
+                <td><strong>${esc(s.name)}</strong></td>
                 <td>${s.vram || '–'} GB</td>
                 <td style="text-align:center">${s.providerCount}</td>
-                <td>${fmtPHtml(s.cheapest.avgPrice)} ${badgeHtml(s.cheapest.providerLabel)}</td>
-                <td class="price-high">${fmtP(s.priciest.avgPrice)} ${badgeHtml(s.priciest.providerLabel)}</td>
+                <td>${fmtPHtml(s.cheapest.priceMin)} ${badgeHtml(s.cheapest.providerLabel)}</td>
+                <td class="price-high">${fmtP(s.priciest.priceMin)} ${badgeHtml(s.priciest.providerLabel)}</td>
                 <td><span class="savings">${s.spread}% spread</span></td>
             </tr>`).join('')
             || '<tr><td colspan="6" style="text-align:center;color:#6b7280;padding:20px">No GPU types found across multiple providers yet.</td></tr>';
 
         const spotRows = spotSavings.slice(0, 12).map(g => `
             <tr>
-                <td><strong>${escapeHtml(g.name)}</strong></td>
+                <td><strong>${esc(g.gpuClass)}</strong> <span style="color:#6b7280;font-size:0.85em">${g.variant || ''}</span></td>
                 <td>${badgeHtml(g.providerLabel)}</td>
                 <td>${g.vram || '–'} GB</td>
                 <td><span style="color:#f59e0b;font-family:monospace">${fmtP(g.tiers.spot)}</span></td>
@@ -726,7 +1187,7 @@
 
         const cheapSpotRows = cheapestSpot.map(g => `
             <tr>
-                <td><strong>${escapeHtml(g.name)}</strong></td>
+                <td><strong>${esc(g.gpuClass)}</strong> <span style="color:#6b7280;font-size:0.85em">${g.variant || ''}</span></td>
                 <td>${badgeHtml(g.providerLabel)}</td>
                 <td>${g.vram || '–'} GB</td>
                 <td><span style="color:#f59e0b;font-family:monospace">${fmtP(g.tiers.spot)}</span></td>
@@ -735,7 +1196,7 @@
 
         const cheapODRows = cheapestOD.map(g => `
             <tr>
-                <td><strong>${escapeHtml(g.name)}</strong></td>
+                <td><strong>${esc(g.gpuClass)}</strong> <span style="color:#6b7280;font-size:0.85em">${g.variant || ''}</span></td>
                 <td>${badgeHtml(g.providerLabel)}</td>
                 <td>${g.vram || '–'} GB</td>
                 <td><span style="color:#06b6d4;font-family:monospace">${fmtP(g.tiers.demand)}</span></td>
@@ -744,20 +1205,20 @@
 
         document.getElementById('deals-container').innerHTML = `
             <div class="deals-section">
-                <div class="deals-section-header">🎯 Price Spread — Same GPU, Different Providers (avg price)</div>
+                <div class="deals-section-header">Price Spread — Same GPU Class, Different Providers</div>
                 <table>
                     <thead><tr>
-                        <th>GPU Model</th><th>VRAM</th><th style="text-align:center">Providers</th>
-                        <th>Cheapest Avg</th><th>Priciest Avg</th><th>Spread</th>
+                        <th>GPU Class</th><th>VRAM</th><th style="text-align:center">Providers</th>
+                        <th>Cheapest</th><th>Priciest</th><th>Spread</th>
                     </tr></thead>
                     <tbody>${spreadRows}</tbody>
                 </table>
             </div>
             <div class="deals-section">
-                <div class="deals-section-header">⚡ Spot vs On-Demand Savings</div>
+                <div class="deals-section-header">Spot vs On-Demand Savings</div>
                 <table>
                     <thead><tr>
-                        <th>GPU Model</th><th>Provider</th><th>VRAM</th>
+                        <th>GPU</th><th>Provider</th><th>VRAM</th>
                         <th>Spot</th><th>On-Demand</th><th>Savings</th>
                     </tr></thead>
                     <tbody>${spotRows}</tbody>
@@ -765,14 +1226,14 @@
             </div>
             <div class="deals-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
                 <div class="deals-section" style="margin-bottom:0">
-                    <div class="deals-section-header">🟡 Cheapest Spot Pricing</div>
+                    <div class="deals-section-header">Cheapest Spot Pricing</div>
                     <table>
                         <thead><tr><th>GPU</th><th>Provider</th><th>VRAM</th><th>Spot/hr</th><th>$/GB VRAM</th></tr></thead>
                         <tbody>${cheapSpotRows || '<tr><td colspan="5" style="text-align:center;color:#6b7280;padding:20px">No spot pricing data yet.</td></tr>'}</tbody>
                     </table>
                 </div>
                 <div class="deals-section" style="margin-bottom:0">
-                    <div class="deals-section-header">🔵 Cheapest On-Demand</div>
+                    <div class="deals-section-header">Cheapest On-Demand</div>
                     <table>
                         <thead><tr><th>GPU</th><th>Provider</th><th>VRAM</th><th>OD/hr</th><th>$/GB VRAM</th></tr></thead>
                         <tbody>${cheapODRows || '<tr><td colspan="5" style="text-align:center;color:#6b7280;padding:20px">No on-demand pricing data yet.</td></tr>'}</tbody>
@@ -782,184 +1243,11 @@
         `;
     }
 
-    // ── Drill-down: pricing breakdown + history chart ─────────────────────────
-
-    async function toggleHistory(safeId, gpuName, provider) {
-        const el   = document.getElementById(`hist-${safeId}`);
-        const chev = document.getElementById(`chev-${safeId}`);
-        if (!el) return;
-
-        // Close if already open
-        if (el.classList.contains('open')) {
-            el.classList.remove('open');
-            chev.style.transform = '';
-            if (expandedHistories.has(safeId)) {
-                expandedHistories.get(safeId).destroy();
-                expandedHistories.delete(safeId);
-            }
-            return;
-        }
-
-        el.classList.add('open');
-        chev.style.transform = 'rotate(90deg)';
-        if (expandedHistories.has(safeId)) return; // already loaded
-
-        // Find the GPU record to build the breakdown table
-        const gpu = filteredData.find(g =>
-            (g.provider + '_' + g.name).replace(/[^a-zA-Z0-9]/g, '_') === safeId
-        ) || buildCombined().find(g =>
-            (g.provider + '_' + g.name).replace(/[^a-zA-Z0-9]/g, '_') === safeId
-        );
-
-        // ── Pricing breakdown table ──────────────────────────────────────────
-        let breakdownHtml = '';
-        if (gpu) {
-            const tierPrices = getAllTierPrices(gpu.pricing);
-            if (tierPrices.length) {
-                const bdRows = tierPrices.map(t => {
-                    const m = TIER_META[t.tier];
-                    return `<tr>
-                        <td><span class="tier-badge" title="${m.desc}" style="background:${m.bg};color:${m.color};border-color:${m.border}">${m.label}</span></td>
-                        <td>${escapeHtml(t.label)}</td>
-                        <td style="font-family:monospace;color:#4ade80">${fmtP(t.price)}</td>
-                        <td style="color:#6b7280;font-size:0.85em">${m.desc}</td>
-                    </tr>`;
-                }).join('');
-
-                breakdownHtml = `
-                    <div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid #2a2f3e">
-                        <div class="breakdown-label">Current Pricing by Tier</div>
-                        <table class="breakdown-table">
-                            <thead>
-                                <tr>
-                                    <th>Tier</th>
-                                    <th>Type</th>
-                                    <th>Price</th>
-                                    <th>Notes</th>
-                                </tr>
-                            </thead>
-                            <tbody>${bdRows}</tbody>
-                        </table>
-                    </div>
-                `;
-            }
-        }
-
-        // Show breakdown immediately, then async-load chart
-        el.innerHTML = breakdownHtml
-            + `<div id="chart-${safeId}"><div style="text-align:center;color:#a0a0a0;padding:12px;font-size:0.85em">Loading price history…</div></div>`;
-
-        // ── History chart ────────────────────────────────────────────────────
-        const safeName = gpuName.replace(/[^a-zA-Z0-9]/g, '_');
-        const chartEl  = () => document.getElementById(`chart-${safeId}`);
-
-        // RunPod/Vast history lives at the root; new providers have a sub-folder
-        const LEGACY_PROVIDERS = new Set(['runpod', 'vast']);
-        const histPath = LEGACY_PROVIDERS.has(provider)
-            ? `rollups/gpu/history/${safeName}.json`
-            : `rollups/gpu/history/${provider}/${safeName}.json`;
-
-        try {
-            const r = await fetch(histPath);
-            if (!r.ok) throw new Error('not found');
-            const data = await r.json();
-
-            if (!data.history || data.history.length < 2) {
-                if (chartEl()) chartEl().innerHTML =
-                    '<div style="text-align:center;color:#a0a0a0;padding:12px;font-size:0.85em">Only one data point — history builds up daily.</div>';
-                return;
-            }
-
-            const labels = data.history.map(h => h.date);
-
-            // Map history field names to readable labels (mirrors FIELD_DEFS + history-specific keys)
-            const HIST_LABELS = {
-                // RunPod
-                community_spot:       'Spot (Community)',
-                secure_spot:          'Spot (Secure)',
-                community_on_demand:  'On-Demand (Community)',
-                secure_on_demand:     'On-Demand (Secure)',
-                uninterruptable:      'Reserved',
-                // Vast.ai
-                vast_spot_min:        'Spot Min',
-                vast_spot_avg:        'Spot Avg',
-                vast_demand_min:      'On-Demand Min',
-                vast_demand_avg:      'On-Demand Avg',
-                vast_rentable_min:    'Rentable Min',
-                vast_min:             'Market Min',
-                vast_max:             'Market Max',
-                vast_avg:             'Market Avg',
-                // Lambda Labs, TensorDock, Vultr, Azure — shared field names
-                demand_min:           'On-Demand Min',
-                demand_avg:           'On-Demand Avg',
-                spot_min:             'Spot Min',
-                spot_avg:             'Spot Avg',
-                min:                  'Market Min',
-                avg:                  'Market Avg',
-                max:                  'Market Max',
-                instance_price:       'Instance Price',
-            };
-
-            const numericKeys = data.history.length > 0
-                ? Object.keys(data.history[0]).filter(k =>
-                    k !== 'date' && k !== 'provider'
-                    && typeof data.history[0][k] === 'number')
-                : [];
-
-            const datasets = [];
-            numericKeys.forEach((key, idx) => {
-                const vals = data.history.map(h => h[key] != null ? +h[key].toFixed(4) : null);
-                if (vals.some(v => v != null)) {
-                    datasets.push({
-                        label: HIST_LABELS[key] || key,
-                        data: vals,
-                        borderColor: CHART_COLORS[idx % CHART_COLORS.length],
-                        backgroundColor: CHART_COLORS[idx % CHART_COLORS.length] + '22',
-                        tension: 0.3, fill: false, pointRadius: 3, spanGaps: true,
-                    });
-                }
-            });
-
-            if (!datasets.length) {
-                if (chartEl()) chartEl().innerHTML =
-                    '<div style="text-align:center;color:#a0a0a0;padding:12px;font-size:0.85em">No price data in history.</div>';
-                return;
-            }
-
-            if (chartEl()) {
-                chartEl().innerHTML = `
-                    <div class="breakdown-label" style="margin-top:4px">Price History</div>
-                    <div style="height:220px"><canvas></canvas></div>`;
-                const ctx   = chartEl().querySelector('canvas').getContext('2d');
-                const chart = new Chart(ctx, {
-                    type: 'line',
-                    data: { labels, datasets },
-                    options: {
-                        responsive: true, maintainAspectRatio: false,
-                        interaction: { mode: 'index', intersect: false },
-                        plugins: {
-                            legend: { labels: { color: '#e0e0e0', boxWidth: 10, font: { size: 11 } } },
-                            tooltip: { callbacks: { label: c => `${c.dataset.label}: $${c.parsed.y?.toFixed(4) ?? 'N/A'}/hr` } },
-                        },
-                        scales: {
-                            x: { ticks: { color: '#a0a0a0', maxTicksLimit: 10 }, grid: { color: '#2a2f3e' } },
-                            y: { ticks: { color: '#a0a0a0', callback: v => `$${v.toFixed(3)}` }, grid: { color: '#2a2f3e' } },
-                        },
-                    },
-                });
-                expandedHistories.set(safeId, chart);
-            }
-        } catch (e) {
-            if (chartEl()) chartEl().innerHTML =
-                '<div style="text-align:center;color:#a0a0a0;padding:12px;font-size:0.85em">No history yet — check back after the first daily run.</div>';
-        }
-    }
-
     // ── Event listeners ──────────────────────────────────────────────────────
 
     document.getElementById('search').addEventListener('input', e => {
         currentSearch = e.target.value.toLowerCase();
-        applyFilters();
+        renderCurrentView();
     });
 
     document.getElementById('vramChips').addEventListener('click', e => {
@@ -968,7 +1256,7 @@
         document.querySelectorAll('#vramChips .chip').forEach(c => c.classList.remove('active'));
         chip.classList.add('active');
         currentVram = chip.dataset.vram;
-        applyFilters();
+        renderCurrentView();
     });
 
     document.getElementById('providerChips').addEventListener('click', e => {
@@ -977,7 +1265,7 @@
         document.querySelectorAll('#providerChips .chip').forEach(c => c.classList.remove('active'));
         chip.classList.add('active');
         currentProvider = chip.dataset.provider || 'all';
-        applyFilters();
+        renderCurrentView();
     });
 
     document.querySelectorAll('.tab').forEach(tab => {
