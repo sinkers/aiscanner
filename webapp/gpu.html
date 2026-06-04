@@ -927,100 +927,174 @@
         loadVariantHistory(vId, entries);
     }
 
-    // ── Load and render price history chart across all providers ──────────────
+    // ── Load and render price chart across all providers ────────────────────
+    //
+    // Strategy: always show a bar chart of current on-demand prices across
+    // all providers for instant visual comparison. If any provider has
+    // meaningful price movement in its history, also show a line chart.
 
     async function loadVariantHistory(vId, entries) {
         const chartWrap = document.getElementById(`chart-wrap-${vId}`);
         if (!chartWrap) return;
 
-        const LEGACY_PROVIDERS = new Set(['runpod', 'vast']);
-        const allDatasets = [];
-        const allLabels = new Set();
-        let colorIdx = 0;
+        // ── 1. Current price bar chart (always shown) ────────────────────────
+        const barEntries = entries
+            .map(e => {
+                const t = e.tiers;
+                return {
+                    provider: e.providerLabel,
+                    spot: t.spot,
+                    demand: t.demand,
+                    reserved: t.reserved,
+                };
+            })
+            .sort((a, b) => ((a.demand ?? a.spot ?? a.reserved ?? 999) - (b.demand ?? b.spot ?? b.reserved ?? 999)));
 
-        // Fetch history for each provider's entry
+        const barLabels = barEntries.map(e => e.provider);
+        const barDatasets = [];
+        if (barEntries.some(e => e.spot != null))
+            barDatasets.push({ label: 'Spot', data: barEntries.map(e => e.spot), backgroundColor: TIER_META.spot.color + '99', borderColor: TIER_META.spot.color, borderWidth: 1 });
+        if (barEntries.some(e => e.demand != null))
+            barDatasets.push({ label: 'On-Demand', data: barEntries.map(e => e.demand), backgroundColor: TIER_META.demand.color + '99', borderColor: TIER_META.demand.color, borderWidth: 1 });
+        if (barEntries.some(e => e.reserved != null))
+            barDatasets.push({ label: 'Reserved', data: barEntries.map(e => e.reserved), backgroundColor: TIER_META.reserved.color + '99', borderColor: TIER_META.reserved.color, borderWidth: 1 });
+
+        let barHtml = '';
+        if (barDatasets.length && barLabels.length > 1) {
+            barHtml = `
+                <div class="breakdown-label" style="margin-top:8px">Current Pricing — Provider Comparison</div>
+                <div style="height:${Math.max(160, barLabels.length * 40 + 60)}px"><canvas id="bar-${vId}"></canvas></div>
+            `;
+        }
+
+        // ── 2. Historical line chart (only if data has movement) ─────────────
+        const LEGACY_PROVIDERS = new Set(['runpod']);
+        const fetchedPaths = new Set();  // dedupe shared paths (runpod/vast)
+
         const historyPromises = entries.map(async (entry) => {
             const safeName = entry.rawName.replace(/[^a-zA-Z0-9]/g, '_');
             const histPath = LEGACY_PROVIDERS.has(entry.provider)
                 ? `rollups/gpu/history/${safeName}.json`
                 : `rollups/gpu/history/${entry.provider}/${safeName}.json`;
 
+            if (fetchedPaths.has(histPath)) return null;
+            fetchedPaths.add(histPath);
+
             try {
                 const r = await fetch(histPath);
                 if (!r.ok) return null;
                 const data = await r.json();
                 if (!data.history || data.history.length < 2) return null;
-                return { provider: entry.providerLabel, history: data.history };
+                const prov = data.history[0]?.provider;
+                const label = prov ? (gpuData[prov]?.name || prov) : entry.providerLabel;
+                return { provider: label, history: data.history };
             } catch { return null; }
         });
 
         const results = (await Promise.all(historyPromises)).filter(Boolean);
 
-        if (!results.length) {
-            chartWrap.innerHTML = '<div style="text-align:center;color:#a0a0a0;padding:12px;font-size:0.85em">No price history yet — builds up daily.</div>';
-            return;
-        }
-
-        // Collect all dates
-        results.forEach(r => r.history.forEach(h => allLabels.add(h.date)));
-        const labels = [...allLabels].sort();
-
-        // For each provider, pick the most representative price field (prefer demand_min or avg)
+        // Check if any history has meaningful price movement (>2% range)
         const PRICE_FIELDS = ['demand_min', 'demand_avg', 'avg', 'secure_on_demand', 'community_on_demand', 'min', 'spot_min', 'spot_avg'];
+        let hasMovement = false;
+        const lineDatasets = [];
+        const allDates = new Set();
+        let lineColorIdx = 0;
 
         results.forEach(r => {
-            // Find best price field
+            r.history.forEach(h => allDates.add(h.date));
+
             let bestField = null;
             for (const f of PRICE_FIELDS) {
                 if (r.history.some(h => h[f] != null && h[f] > 0)) { bestField = f; break; }
             }
             if (!bestField) return;
 
+            const vals = r.history.map(h => h[bestField]).filter(v => v != null && v > 0);
+            if (vals.length < 2) return;
+            const min = Math.min(...vals), max = Math.max(...vals);
+            const range = min > 0 ? (max - min) / min : 0;
+            if (range > 0.02) hasMovement = true;
+
             const dateMap = {};
             r.history.forEach(h => { dateMap[h.date] = h[bestField]; });
 
-            const color = CHART_COLORS[colorIdx % CHART_COLORS.length];
-            colorIdx++;
-
-            allDatasets.push({
+            const color = CHART_COLORS[lineColorIdx % CHART_COLORS.length];
+            lineColorIdx++;
+            lineDatasets.push({
                 label: r.provider,
-                data: labels.map(d => dateMap[d] != null ? +dateMap[d].toFixed(4) : null),
+                data: null,  // filled after dates are sorted
+                _dateMap: dateMap,
                 borderColor: color,
                 backgroundColor: color + '22',
                 tension: 0.3, fill: false, pointRadius: 3, spanGaps: true,
             });
         });
 
-        if (!allDatasets.length) {
-            chartWrap.innerHTML = '<div style="text-align:center;color:#a0a0a0;padding:12px;font-size:0.85em">No price data in history.</div>';
+        const sortedDates = [...allDates].sort();
+        lineDatasets.forEach(ds => {
+            ds.data = sortedDates.map(d => ds._dateMap[d] != null ? +ds._dateMap[d].toFixed(4) : null);
+            delete ds._dateMap;
+        });
+
+        let lineHtml = '';
+        if (hasMovement && lineDatasets.length) {
+            lineHtml = `
+                <div class="breakdown-label" style="margin-top:12px">Price History</div>
+                <div style="height:220px"><canvas id="line-${vId}"></canvas></div>
+            `;
+        } else if (results.length && !hasMovement) {
+            lineHtml = `<div style="text-align:center;color:#6b7280;padding:8px 0;font-size:0.82em">Price history is flat — no significant movement in the collection period.</div>`;
+        }
+
+        chartWrap.innerHTML = barHtml + lineHtml;
+        if (!barHtml && !lineHtml) {
+            chartWrap.innerHTML = '<div style="text-align:center;color:#a0a0a0;padding:12px;font-size:0.85em">No price history yet — builds up daily.</div>';
             return;
         }
 
-        chartWrap.innerHTML = `
-            <div class="breakdown-label" style="margin-top:8px">Price History — All Providers</div>
-            <div style="height:240px"><canvas></canvas></div>
-        `;
-
-        const ctx = chartWrap.querySelector('canvas').getContext('2d');
-        const chart = new Chart(ctx, {
-            type: 'line',
-            data: { labels, datasets: allDatasets },
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                interaction: { mode: 'index', intersect: false },
-                plugins: {
-                    legend: { labels: { color: '#e0e0e0', boxWidth: 10, font: { size: 11 } } },
-                    tooltip: { callbacks: { label: c => `${c.dataset.label}: ${c.parsed.y != null ? '$' + c.parsed.y.toFixed(4) + '/hr' : 'N/A'}` } },
+        // Render bar chart
+        const barCanvas = document.getElementById(`bar-${vId}`);
+        if (barCanvas) {
+            const barChart = new Chart(barCanvas.getContext('2d'), {
+                type: 'bar',
+                data: { labels: barLabels, datasets: barDatasets },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: {
+                        legend: { labels: { color: '#e0e0e0', boxWidth: 10, font: { size: 11 } } },
+                        tooltip: { callbacks: { label: c => `${c.dataset.label}: $${c.parsed.x?.toFixed(3) ?? 'N/A'}/hr` } },
+                    },
+                    scales: {
+                        x: { ticks: { color: '#a0a0a0', callback: v => `$${v.toFixed(2)}` }, grid: { color: '#2a2f3e' } },
+                        y: { ticks: { color: '#e0e0e0', font: { size: 11 } }, grid: { display: false } },
+                    },
                 },
-                scales: {
-                    x: { ticks: { color: '#a0a0a0', maxTicksLimit: 10 }, grid: { color: '#2a2f3e' } },
-                    y: { ticks: { color: '#a0a0a0', callback: v => `$${v.toFixed(3)}` }, grid: { color: '#2a2f3e' } },
-                },
-            },
-        });
+            });
+            chartInstances.set(vId + '_bar', barChart);
+        }
 
-        if (chartInstances.has(vId)) chartInstances.get(vId).destroy();
-        chartInstances.set(vId, chart);
+        // Render line chart (only if meaningful movement)
+        const lineCanvas = document.getElementById(`line-${vId}`);
+        if (lineCanvas && hasMovement) {
+            const lineChart = new Chart(lineCanvas.getContext('2d'), {
+                type: 'line',
+                data: { labels: sortedDates, datasets: lineDatasets },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { labels: { color: '#e0e0e0', boxWidth: 10, font: { size: 11 } } },
+                        tooltip: { callbacks: { label: c => `${c.dataset.label}: ${c.parsed.y != null ? '$' + c.parsed.y.toFixed(4) + '/hr' : 'N/A'}` } },
+                    },
+                    scales: {
+                        x: { ticks: { color: '#a0a0a0', maxTicksLimit: 10 }, grid: { color: '#2a2f3e' } },
+                        y: { ticks: { color: '#a0a0a0', callback: v => `$${v.toFixed(3)}` }, grid: { color: '#2a2f3e' } },
+                    },
+                },
+            });
+            chartInstances.set(vId + '_line', lineChart);
+        }
     }
 
     // ── Best Deals view ──────────────────────────────────────────────────────

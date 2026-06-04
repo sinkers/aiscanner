@@ -1167,31 +1167,16 @@ def update_gpu_rollups(gpu_snapshot, today):
         rollup["history"].sort(key=lambda x: x["date"])
         s3_put_json(key, rollup, cache_seconds=86400)
 
-    # Vast.ai — merged into RunPod history files (adds vast_* fields)
-    for gpu in gpu_snapshot.get("vast", {}).get("gpus", []):
-        name = gpu.get("name", "")
-        if not name:
-            continue
-        key = f"rollups/gpu/history/{safe_key(name)}.json"
-        rollup = s3_get_json(key) or {"gpu_name": name, "history": []}
-        existing_today = [h for h in rollup["history"] if h["date"] == today]
-        rollup["history"] = [h for h in rollup["history"] if h["date"] != today]
-        p = gpu.get("pricing", {})
-        combined = existing_today[0] if existing_today else {"date": today}
-        combined.update({field: val for field, val in {
-            "vast_min":             p.get("min"),
-            "vast_max":             p.get("max"),
-            "vast_avg":             p.get("avg"),
-            "vast_spot_min":        p.get("spot_min"),
-            "vast_spot_avg":        p.get("spot_avg"),
-            "vast_demand_min":      p.get("demand_min"),
-            "vast_demand_avg":      p.get("demand_avg"),
-            "vast_rentable_min":    p.get("rentable_min"),
-            "vast_rentable_offers": gpu.get("rentable_offers"),
-        }.items() if val is not None})
-        rollup["history"].append(combined)
-        rollup["history"].sort(key=lambda x: x["date"])
-        s3_put_json(key, rollup, cache_seconds=86400)
+    # Vast.ai — own history path (like other providers)
+    _write_provider_rollup("vast", gpu_snapshot.get("vast", {}).get("gpus", []), today, {
+        "min":          "min",
+        "max":          "max",
+        "avg":          "avg",
+        "spot_min":     "spot_min",
+        "spot_avg":     "spot_avg",
+        "demand_min":   "demand_min",
+        "demand_avg":   "demand_avg",
+    })
 
     # Lambda Labs — on-demand only, per-GPU pricing
     _write_provider_rollup("lambda_labs", gpu_snapshot.get("lambda_labs", {}).get("gpus", []), today, {
