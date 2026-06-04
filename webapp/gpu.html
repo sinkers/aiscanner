@@ -433,18 +433,73 @@
     // Normalises raw GPU names from different providers into a canonical
     // { gpuClass, variant } so we can group the same chip together.
 
+    // Explicit overrides for names that regex can't handle cleanly.
+    // Maps a normalised lowercase prefix to { gpuClass, variantPrefix }.
+    const GPU_CLASS_OVERRIDES = [
+        // PRO 6000 MIG slices (no "RTX" prefix in some providers)
+        { match: 'pro 6000 mig',          gpuClass: 'RTX PRO 6000', variantPrefix: 'MIG' },
+        // TensorDock concatenated names
+        { match: 'geforcertx2060super',    gpuClass: 'RTX 2060',     variantPrefix: 'SUPER' },
+        { match: 'geforcertx',             gpuClass: null,            variantPrefix: null, parse: n => {
+            // "GEFORCERTX3090" → class "RTX 3090", "GEFORCERTX3080TI" → "RTX 3080 Ti"
+            const m = n.match(/GEFORCERTX(\d{4})(TI|SUPER)?$/i);
+            if (!m) return null;
+            const suffix = m[2] ? ' ' + m[2][0].toUpperCase() + m[2].slice(1).toLowerCase() : '';
+            return { gpuClass: 'RTX ' + m[1] + suffix, variant: null };
+        }},
+        { match: 'quadrortx',             gpuClass: null, variantPrefix: null, parse: n => {
+            const m = n.match(/QUADRORTX(\d+)/i);
+            return m ? { gpuClass: 'Quadro RTX ' + m[1], variant: null } : null;
+        }},
+        { match: 'rtx6000ada',            gpuClass: 'RTX 6000 Ada',  variantPrefix: null },
+        { match: 'rtxa',                  gpuClass: null, variantPrefix: null, parse: n => {
+            const m = n.match(/RTXA(\d+)/i);
+            return m ? { gpuClass: 'RTX A' + m[1], variant: null } : null;
+        }},
+    ];
+
     function parseGpuClass(rawName) {
         let name = rawName.trim();
+
+        // Check explicit overrides first (handles TensorDock concatenated names, MIG slices)
+        const nameLower = name.toLowerCase();
+        for (const ov of GPU_CLASS_OVERRIDES) {
+            if (nameLower.startsWith(ov.match) || nameLower === ov.match) {
+                if (ov.parse) {
+                    const result = ov.parse(name);
+                    if (result) return { gpuClass: result.gpuClass, variant: result.variant };
+                }
+                if (ov.gpuClass) {
+                    // Extract any remaining suffix as variant info
+                    const remainder = name.substring(name.toLowerCase().indexOf(ov.match) + ov.match.length).trim();
+                    const variantParts = [];
+                    if (ov.variantPrefix) variantParts.push(ov.variantPrefix);
+                    if (remainder) variantParts.push(remainder);
+                    return { gpuClass: ov.gpuClass, variant: variantParts.join(' ') || null };
+                }
+            }
+        }
 
         // Strip common prefixes
         name = name.replace(/^(NVIDIA|AMD|Intel)\s+/i, '');
         name = name.replace(/^GeForce\s+/i, '');
-
-        // Normalise whitespace
         name = name.replace(/\s+/g, ' ');
 
-        // Extract variant suffixes: SXM, SXM4, SXM5, PCIe, NVLink, HBM, etc.
         const variantParts = [];
+
+        // Form factor / workstation suffixes → variant
+        const formMatch = name.match(/\b(MaxQ|WK|WS|SFF|Blackwell|Hopper|Tensor)\b/i);
+        if (formMatch) {
+            variantParts.push(formMatch[1]);
+            name = name.replace(formMatch[0], '').trim();
+        }
+
+        // MIG slice pattern: "MIG 24GB", "MIG 48GB"
+        const migMatch = name.match(/\bMIG\s*(\d+\s*GB)?/i);
+        if (migMatch) {
+            variantParts.push(migMatch[0].trim());
+            name = name.replace(migMatch[0], '').trim();
+        }
 
         // Interface: SXM, SXM4, SXM5, PCIe, NVLink, HBM2e, HBM3
         const ifaceMatch = name.match(/\b(SXM\d*|PCIe?|NVLink|HBM\d?\w*)\b/i);
@@ -453,23 +508,36 @@
             name = name.replace(ifaceMatch[0], '').trim();
         }
 
-        // Memory spec in the name: "80GB", "40 GB", etc.
+        // Memory spec: "80GB", "40 GB"
         const memMatch = name.match(/\b(\d+)\s*GB\b/i);
         if (memMatch) {
             variantParts.push(memMatch[1] + 'GB');
             name = name.replace(memMatch[0], '').trim();
         }
 
-        // Clean up remaining noise
+        // Generation suffix that stays in the class name: Ada, SUPER, Ti, S (single letter)
+        // "RTX 4080 SUPER" → class "RTX 4080 SUPER" (SUPER is a different GPU)
+        // "RTX PRO 6000 S" → class "RTX PRO 6000", variant "S"
+        // BUT "RTX 4070S Ti" → class "RTX 4070S Ti" (Vast.ai shorthand for SUPER)
+        const trailingSuffix = name.match(/\s+(S|WS|WK)$/i);
+        if (trailingSuffix) {
+            variantParts.unshift(trailingSuffix[1].toUpperCase());
+            name = name.replace(trailingSuffix[0], '').trim();
+        }
+
+        // Clean up
         name = name.replace(/\s*[-–]\s*$/, '').trim();
         name = name.replace(/\s+/g, ' ');
 
-        // Special handling: Azure/Oracle generic series names like "NC-series"
-        // Keep as-is; they won't match anything else anyway
-        const gpuClass = name || rawName;
-        const variant = variantParts.length ? variantParts.join(' ') : null;
+        // Normalise casing: "RTX Pro 6000" → "RTX PRO 6000"
+        name = name.replace(/\bPro\b/g, 'PRO');
+        // "Ti" consistency
+        name = name.replace(/\bti\b/gi, 'Ti');
 
-        return { gpuClass, variant };
+        return {
+            gpuClass: name || rawName,
+            variant: variantParts.length ? variantParts.join(' ') : null,
+        };
     }
 
     // ── State ────────────────────────────────────────────────────────────────
