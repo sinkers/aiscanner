@@ -1,6 +1,12 @@
 {
   "_description": "Master list of GPU cloud providers. Source: getdeploying.com/gpus + manual additions.",
   "_updated": "2026-06-04",
+  "_tracking_goals": [
+    "Price per GPU per hour (spot, on-demand, reserved where available)",
+    "Real-time availability: is the GPU actually in stock right now? Not just listed but rentable. Different providers surface this differently (RunPod: available bool, Vast.ai: rentable_offers count, Lambda: regions_with_capacity). This is a key differentiator — many providers list GPUs they can't actually deliver.",
+    "VRAM, interface (SXM/PCIe), and multi-GPU options",
+    "Price history over time for trend tracking"
+  ],
   "providers": [
     {
       "name": "RunPod",
@@ -168,11 +174,12 @@
       "name": "Thunder Compute",
       "slug": "thunder_compute",
       "url": "https://www.thundercompute.com/",
-      "status": "candidate",
+      "status": "planned",
       "api_key_required": true,
       "pricing_types": ["on_demand"],
       "gpu_count": 5,
-      "price_range": "$0.35–$2.49/hr"
+      "price_range": "$0.35–$2.49/hr",
+      "notes": "Next provider to implement"
     },
     {
       "name": "Nebius",
