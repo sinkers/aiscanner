@@ -1232,7 +1232,8 @@ def fetch_thunder_compute_gpus():
         # Per-GPU hourly: cheapest is prototyping, most expensive is production
         proto_price = prices.get("prototyping") or prices.get("default")
         prod_price = prices.get("production") or prices.get("native")
-        cheapest = min(p for p in prices.values() if p > 0) if prices else 0
+        positive = [p for p in prices.values() if p > 0]
+        cheapest = min(positive) if positive else 0
 
         results.append({
             "name": gdata["display"],
@@ -1290,7 +1291,7 @@ def fetch_nova_cloud_gpus():
 
         if gpu_type not in gpu_groups:
             gpu_groups[gpu_type] = {
-                "vram_gb": round((offer.get("gpu_ram_mb", 0)) / 1024),
+                "vram_gb": round((offer.get("gpu_ram_mb") or 0) / 1024),
                 "demand_prices": [],
                 "spot_prices": [],
                 "available": 0,

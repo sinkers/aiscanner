@@ -174,12 +174,11 @@
       "name": "Thunder Compute",
       "slug": "thunder_compute",
       "url": "https://www.thundercompute.com/",
-      "status": "planned",
+      "status": "implemented",
       "api_key_required": true,
       "pricing_types": ["on_demand"],
       "gpu_count": 5,
-      "price_range": "$0.35–$2.49/hr",
-      "notes": "Next provider to implement"
+      "price_range": "$0.35–$2.49/hr"
     },
     {
       "name": "Nebius",
