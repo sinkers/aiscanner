@@ -86,9 +86,10 @@ def _load_gpu_keys():
       2. SSM Parameter Store  (set once post-deploy with make configure-gpu)
     """
     _key_map = {
-        "runpod":       ("RUNPOD_API_KEY",       "/dame/gpu/runpod_api_key"),
-        "vast":         ("VAST_API_KEY",          "/dame/gpu/vast_api_key"),
-        "lambda_labs":  ("LAMBDA_LABS_API_KEY",   "/dame/gpu/lambda_labs_api_key"),
+        "runpod":          ("RUNPOD_API_KEY",          "/dame/gpu/runpod_api_key"),
+        "vast":            ("VAST_API_KEY",             "/dame/gpu/vast_api_key"),
+        "lambda_labs":     ("LAMBDA_LABS_API_KEY",      "/dame/gpu/lambda_labs_api_key"),
+        "thunder_compute": ("THUNDER_COMPUTE_API_KEY",  "/dame/gpu/thunder_compute_api_key"),
     }
     result = {}
     for provider, (env_var, ssm_path) in _key_map.items():
@@ -97,9 +98,10 @@ def _load_gpu_keys():
 
 
 _GPU_KEYS = _load_gpu_keys()
-RUNPOD_API_KEY      = _GPU_KEYS["runpod"]
-VAST_API_KEY        = _GPU_KEYS["vast"]
-LAMBDA_LABS_API_KEY = _GPU_KEYS["lambda_labs"]
+RUNPOD_API_KEY          = _GPU_KEYS["runpod"]
+VAST_API_KEY            = _GPU_KEYS["vast"]
+LAMBDA_LABS_API_KEY     = _GPU_KEYS["lambda_labs"]
+THUNDER_COMPUTE_API_KEY = _GPU_KEYS["thunder_compute"]
 
 
 # ---------------------------------------------------------------------------
@@ -1144,6 +1146,214 @@ def fetch_aws_gpus():
     return results
 
 
+# ---------------------------------------------------------------------------
+# GPU pricing collection — Thunder Compute
+# ---------------------------------------------------------------------------
+
+THUNDER_COMPUTE_API_URL = "https://api.thundercompute.com:8443"
+
+
+def fetch_thunder_compute_gpus():
+    """Fetch GPU specs and pricing from Thunder Compute API.
+
+    Merges /specs (GPU types, VRAM, multi-GPU configs) with /pricing
+    (hourly rates). Groups by GPU type, reporting per-GPU price for
+    the cheapest mode (prototyping < production).
+    """
+    if not THUNDER_COMPUTE_API_KEY:
+        return []
+
+    specs_data = http_get(f"{THUNDER_COMPUTE_API_URL}/specs", token=THUNDER_COMPUTE_API_KEY)
+    price_data = http_get(f"{THUNDER_COMPUTE_API_URL}/pricing", token=THUNDER_COMPUTE_API_KEY)
+
+    if not specs_data or not price_data:
+        print("  Thunder Compute: API returned no data")
+        return []
+
+    specs = specs_data.get("specs", {})
+    pricing = price_data.get("pricing", {})
+
+    # Group specs by base GPU type (e.g. "h100", "a100xl", "l40s")
+    gpu_groups = {}
+    for key, spec in specs.items():
+        display = spec.get("displayName", key)
+        vram = spec.get("vramGB", 0)
+        gpu_count = spec.get("gpuCount", 1)
+        mode = spec.get("mode", "")
+
+        # Extract base type: "h100_x2_production" → "h100"
+        base = key.split("_x")[0] if "_x" in key else key.rsplit("_", 1)[0]
+
+        if base not in gpu_groups:
+            gpu_groups[base] = {
+                "display": display,
+                "vram": vram,
+            }
+
+        # Per-GPU price for single-GPU configs
+        price = pricing.get(key, 0)
+        if gpu_count == 1 and price > 0:
+            existing = gpu_groups[base].get("prices", {})
+            existing[mode] = price
+            gpu_groups[base]["prices"] = existing
+
+    # Also check pricing keys not in specs (e.g. l40s)
+    for pkey, price in pricing.items():
+        if price <= 0 or pkey in ("additional_vcpus", "disk_gb",
+                                   "ephemeral_disk_gb", "snapshot_gb"):
+            continue
+        base = pkey.split("_x")[0] if "_x" in pkey else pkey.rsplit("_", 1)[0]
+        if base not in gpu_groups and not pkey.endswith("_native"):
+            # Infer name from key
+            name_map = {
+                "l40s": ("NVIDIA L40S", 48),
+                "l40": ("NVIDIA L40", 48),
+                "h100": ("NVIDIA H100", 80),
+                "a100xl": ("NVIDIA A100 (80GB)", 80),
+                "a6000": ("RTX A6000", 48),
+            }
+            if base in name_map:
+                display, vram = name_map[base]
+                gpu_groups[base] = {"display": display, "vram": vram, "prices": {}}
+
+        if base in gpu_groups and "_x" not in pkey:
+            mode = "prototyping" if "prototyping" in pkey else (
+                "production" if "production" in pkey or "native" in pkey else "default")
+            existing = gpu_groups[base].get("prices", {})
+            if mode not in existing:
+                existing[mode] = price
+                gpu_groups[base]["prices"] = existing
+
+    results = []
+    for base, gdata in gpu_groups.items():
+        prices = gdata.get("prices", {})
+        if not prices:
+            continue
+        # Per-GPU hourly: cheapest is prototyping, most expensive is production
+        proto_price = prices.get("prototyping") or prices.get("default")
+        prod_price = prices.get("production") or prices.get("native")
+        positive = [p for p in prices.values() if p > 0]
+        cheapest = min(positive) if positive else 0
+
+        results.append({
+            "name": gdata["display"],
+            "vram_gb": gdata["vram"],
+            "pricing": {
+                "min":        cheapest,
+                "avg":        cheapest,
+                "demand_min": proto_price or cheapest,
+                "demand_avg": prod_price or cheapest,
+            },
+        })
+
+    results.sort(key=lambda x: x["name"])
+    print(f"  Thunder Compute: {len(results)} GPU types")
+    return results
+
+
+# ---------------------------------------------------------------------------
+# GPU pricing collection — Nova Cloud
+# ---------------------------------------------------------------------------
+
+NOVA_CLOUD_API_URL = "https://api.nova-cloud.ai"
+
+# Display name map for Nova Cloud's short GPU type codes
+_NOVA_GPU_NAMES = {
+    "4090":    "RTX 4090",
+    "5090":    "RTX 5090",
+    "pro6000": "RTX PRO 6000",
+    "a100":    "A100",
+    "h100":    "H100",
+    "l40s":    "L40S",
+}
+
+
+def fetch_nova_cloud_gpus():
+    """Fetch GPU offers from Nova Cloud (no auth required).
+
+    Uses /search for live availability + pricing, and /pricing as fallback
+    for GPU types that are listed but have no current offers.
+    """
+    search_data = http_get(f"{NOVA_CLOUD_API_URL}/search")
+    price_data = http_get(f"{NOVA_CLOUD_API_URL}/pricing")
+
+    if not search_data and not price_data:
+        print("  Nova Cloud: API returned no data")
+        return []
+
+    # Group /search offers by GPU type (single-GPU only for per-GPU pricing)
+    gpu_groups = {}
+    for offer in (search_data or []):
+        gpu_type = offer.get("gpu_type", "")
+        gpu_count = offer.get("gpu_count", 1)
+        if gpu_count != 1:
+            continue
+
+        if gpu_type not in gpu_groups:
+            gpu_groups[gpu_type] = {
+                "vram_gb": round((offer.get("gpu_ram_mb") or 0) / 1024),
+                "demand_prices": [],
+                "spot_prices": [],
+                "available": 0,
+                "total": 0,
+                "locations": set(),
+            }
+
+        g = gpu_groups[gpu_type]
+        price = offer.get("gpu_price_hourly", 0)
+        if price > 0:
+            g["demand_prices"].append(price)
+        spot = offer.get("interruptible_rate", 0)
+        if spot > 0:
+            g["spot_prices"].append(spot)
+        g["total"] += 1
+        if offer.get("available"):
+            g["available"] += 1
+        loc = offer.get("location", "")
+        if loc:
+            g["locations"].add(loc)
+
+    # Add any GPU types from /pricing not in /search (listed but no current offers)
+    if price_data and isinstance(price_data, dict):
+        for gpu_type, price in price_data.get("gpus", {}).items():
+            if gpu_type not in gpu_groups and price > 0:
+                gpu_groups[gpu_type] = {
+                    "vram_gb": 0,
+                    "demand_prices": [price],
+                    "spot_prices": [],
+                    "available": 0,
+                    "total": 0,
+                    "locations": set(),
+                }
+
+    results = []
+    for gpu_type, gdata in gpu_groups.items():
+        demand = gdata["demand_prices"]
+        spot = gdata["spot_prices"]
+        display_name = _NOVA_GPU_NAMES.get(gpu_type, gpu_type.upper())
+
+        results.append({
+            "name": display_name,
+            "vram_gb": gdata["vram_gb"],
+            "available": gdata["available"] > 0,
+            "available_count": gdata["available"],
+            "total_offers": gdata["total"],
+            "locations": sorted(gdata["locations"]),
+            "pricing": {
+                "min":        min(spot + demand) if (spot + demand) else 0,
+                "avg":        sum(demand) / len(demand) if demand else 0,
+                "demand_min": min(demand) if demand else None,
+                "demand_avg": sum(demand) / len(demand) if demand else None,
+                "spot_min":   min(spot) if spot else None,
+                "spot_avg":   sum(spot) / len(spot) if spot else None,
+            },
+        })
+
+    results.sort(key=lambda x: x["name"])
+    print(f"  Nova Cloud: {len(results)} GPU types ({sum(1 for r in results if r['available'])} available)")
+    return results
+
+
 def update_gpu_rollups(gpu_snapshot, today):
     """Append today's prices to per-GPU history files for all providers."""
 
@@ -1231,9 +1441,27 @@ def update_gpu_rollups(gpu_snapshot, today):
         "demand_avg": "demand_avg",
     })
 
+    # Thunder Compute — on-demand pricing (prototyping vs production tiers)
+    _write_provider_rollup("thunder_compute", gpu_snapshot.get("thunder_compute", {}).get("gpus", []), today, {
+        "min":        "min",
+        "avg":        "avg",
+        "demand_min": "demand_min",
+        "demand_avg": "demand_avg",
+    })
+
+    # Nova Cloud — on-demand + spot (interruptible) pricing
+    _write_provider_rollup("nova_cloud", gpu_snapshot.get("nova_cloud", {}).get("gpus", []), today, {
+        "min":        "min",
+        "avg":        "avg",
+        "demand_min": "demand_min",
+        "demand_avg": "demand_avg",
+        "spot_min":   "spot_min",
+        "spot_avg":   "spot_avg",
+    })
+
     counts = {
         k: len(gpu_snapshot.get(k, {}).get("gpus", []))
-        for k in ("runpod", "vast", "lambda_labs", "tensordock", "vultr", "azure", "oracle", "aws")
+        for k in ("runpod", "vast", "lambda_labs", "tensordock", "vultr", "azure", "oracle", "aws", "thunder_compute", "nova_cloud")
     }
     print(f"GPU rollups updated: {counts}")
 
@@ -1447,25 +1675,29 @@ def handler(event, context):
 
     # GPU rental pricing (all providers)
     print("Fetching GPU rental pricing...")
-    runpod_gpus      = fetch_runpod_gpus()
-    vast_gpus        = fetch_vastai_gpus()
-    lambdalabs_gpus  = fetch_lambdalabs_gpus()
-    tensordock_gpus  = fetch_tensordock_gpus()
-    vultr_gpus       = fetch_vultr_gpus()
-    azure_gpus       = fetch_azure_gpus()
-    oracle_gpus      = fetch_oracle_gpus()
-    aws_gpus         = fetch_aws_gpus()
+    runpod_gpus          = fetch_runpod_gpus()
+    vast_gpus            = fetch_vastai_gpus()
+    lambdalabs_gpus      = fetch_lambdalabs_gpus()
+    tensordock_gpus      = fetch_tensordock_gpus()
+    vultr_gpus           = fetch_vultr_gpus()
+    azure_gpus           = fetch_azure_gpus()
+    oracle_gpus          = fetch_oracle_gpus()
+    aws_gpus             = fetch_aws_gpus()
+    thunder_compute_gpus = fetch_thunder_compute_gpus()
+    nova_cloud_gpus      = fetch_nova_cloud_gpus()
 
     # Build snapshot — always write if at least one provider has data
     _provider_results = {
-        "runpod":       runpod_gpus,
-        "vast":         vast_gpus,
-        "lambda_labs":  lambdalabs_gpus,
-        "tensordock":   tensordock_gpus,
-        "vultr":        vultr_gpus,
-        "azure":        azure_gpus,
-        "oracle":       oracle_gpus,
-        "aws":          aws_gpus,
+        "runpod":          runpod_gpus,
+        "vast":            vast_gpus,
+        "lambda_labs":     lambdalabs_gpus,
+        "tensordock":      tensordock_gpus,
+        "vultr":           vultr_gpus,
+        "azure":           azure_gpus,
+        "oracle":          oracle_gpus,
+        "aws":             aws_gpus,
+        "thunder_compute": thunder_compute_gpus,
+        "nova_cloud":      nova_cloud_gpus,
     }
     any_data = any(gpus for gpus in _provider_results.values())
 
@@ -1479,7 +1711,9 @@ def handler(event, context):
             "vultr":       {"name": "Vultr",         "total_gpus": len(vultr_gpus),       "gpus": vultr_gpus},
             "azure":       {"name": "Azure",         "total_gpus": len(azure_gpus),       "gpus": azure_gpus},
             "oracle":      {"name": "Oracle Cloud",  "total_gpus": len(oracle_gpus),      "gpus": oracle_gpus},
-            "aws":         {"name": "AWS EC2",       "total_gpus": len(aws_gpus),         "gpus": aws_gpus},
+            "aws":             {"name": "AWS EC2",           "total_gpus": len(aws_gpus),             "gpus": aws_gpus},
+            "thunder_compute": {"name": "Thunder Compute",  "total_gpus": len(thunder_compute_gpus), "gpus": thunder_compute_gpus},
+            "nova_cloud":      {"name": "Nova Cloud",       "total_gpus": len(nova_cloud_gpus),      "gpus": nova_cloud_gpus},
         }
 
         # Carry forward last known data for any provider that returned nothing

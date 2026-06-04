@@ -1,0 +1,667 @@
+{
+  "_description": "Master list of GPU cloud providers. Source: getdeploying.com/gpus + manual additions.",
+  "_updated": "2026-06-04",
+  "_tracking_goals": [
+    "Price per GPU per hour (spot, on-demand, reserved where available)",
+    "Real-time availability: is the GPU actually in stock right now? Not just listed but rentable. Different providers surface this differently (RunPod: available bool, Vast.ai: rentable_offers count, Lambda: regions_with_capacity). This is a key differentiator — many providers list GPUs they can't actually deliver.",
+    "VRAM, interface (SXM/PCIe), and multi-GPU options",
+    "Price history over time for trend tracking"
+  ],
+  "providers": [
+    {
+      "name": "RunPod",
+      "slug": "runpod",
+      "url": "https://www.runpod.io/",
+      "status": "implemented",
+      "api_key_required": true,
+      "pricing_types": ["on_demand", "reservation", "spot"],
+      "gpu_count": 27,
+      "price_range": "$0.16–$5.98/hr"
+    },
+    {
+      "name": "Vast.ai",
+      "slug": "vast",
+      "url": "https://vast.ai",
+      "status": "implemented",
+      "api_key_required": false,
+      "pricing_types": ["on_demand", "reservation", "spot"],
+      "gpu_count": 50,
+      "price_range": "$0.02–$33.34/hr"
+    },
+    {
+      "name": "Lambda Labs",
+      "slug": "lambda_labs",
+      "url": "https://lambda.ai/instances",
+      "status": "implemented",
+      "api_key_required": true,
+      "pricing_types": ["on_demand"],
+      "gpu_count": 8,
+      "price_range": "$0.69–$6.99/hr"
+    },
+    {
+      "name": "TensorDock",
+      "slug": "tensordock",
+      "url": "https://www.tensordock.com/",
+      "status": "implemented",
+      "api_key_required": false,
+      "pricing_types": ["on_demand"],
+      "gpu_count": 9,
+      "price_range": "$0.21–$2.36/hr"
+    },
+    {
+      "name": "Vultr",
+      "slug": "vultr",
+      "url": "https://www.vultr.com/products/cloud-gpu/",
+      "status": "implemented",
+      "api_key_required": false,
+      "pricing_types": ["on_demand", "reservation"],
+      "gpu_count": 10,
+      "price_range": "$0.47–$2.99/hr"
+    },
+    {
+      "name": "Azure",
+      "slug": "azure",
+      "url": "https://learn.microsoft.com/en-us/azure/virtual-machines/",
+      "status": "implemented",
+      "api_key_required": false,
+      "pricing_types": ["on_demand", "reservation", "spot"],
+      "gpu_count": 10,
+      "price_range": "$0.09–$27.04/hr"
+    },
+    {
+      "name": "Oracle Cloud",
+      "slug": "oracle",
+      "url": "https://www.oracle.com/cloud/compute/gpu/",
+      "status": "implemented",
+      "api_key_required": false,
+      "pricing_types": ["on_demand"],
+      "gpu_count": 13,
+      "price_range": "$1.27–$18.00/hr"
+    },
+    {
+      "name": "AWS EC2",
+      "slug": "aws",
+      "url": "https://docs.aws.amazon.com/dlami/",
+      "status": "implemented",
+      "api_key_required": false,
+      "pricing_types": ["on_demand", "reservation"],
+      "gpu_count": 15,
+      "price_range": "$0.19–$17.80/hr"
+    },
+    {
+      "name": "Google Cloud",
+      "slug": "google_cloud",
+      "url": "https://cloud.google.com/gpu",
+      "status": "planned",
+      "api_key_required": false,
+      "pricing_types": ["on_demand", "reservation", "spot"],
+      "gpu_count": 10,
+      "price_range": "$0.13–$16.11/hr",
+      "notes": "Public pricing API available"
+    },
+    {
+      "name": "CoreWeave",
+      "slug": "coreweave",
+      "url": "https://coreweave.com/gpu-cloud",
+      "status": "planned",
+      "api_key_required": true,
+      "pricing_types": ["on_demand", "spot"],
+      "gpu_count": 10,
+      "price_range": "$0.78–$10.50/hr"
+    },
+    {
+      "name": "FluidStack",
+      "slug": "fluidstack",
+      "url": "https://www.fluidstack.io/",
+      "status": "planned",
+      "api_key_required": true,
+      "pricing_types": ["on_demand"],
+      "gpu_count": 5,
+      "price_range": "$1.30–$2.30/hr"
+    },
+    {
+      "name": "DataCrunch",
+      "slug": "datacrunch",
+      "url": "https://datacrunch.io/",
+      "status": "planned",
+      "api_key_required": true,
+      "pricing_types": ["on_demand"],
+      "gpu_count": null,
+      "price_range": null
+    },
+    {
+      "name": "Paperspace",
+      "slug": "paperspace",
+      "url": "https://www.paperspace.com/gpu-cloud",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand"],
+      "gpu_count": 12,
+      "price_range": "$0.45–$5.99/hr"
+    },
+    {
+      "name": "Salad",
+      "slug": "salad",
+      "url": "https://salad.com/pricing",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand"],
+      "gpu_count": 33,
+      "price_range": "$0.03–$0.27/hr",
+      "notes": "Very cheap consumer GPU marketplace"
+    },
+    {
+      "name": "Crusoe",
+      "slug": "crusoe",
+      "url": "https://crusoe.ai/cloud/pricing/",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand", "spot"],
+      "gpu_count": 9,
+      "price_range": "$0.40–$4.29/hr"
+    },
+    {
+      "name": "Hyperstack",
+      "slug": "hyperstack",
+      "url": "https://www.hyperstack.cloud/",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand", "reservation", "spot"],
+      "gpu_count": 6,
+      "price_range": "$0.11–$3.50/hr"
+    },
+    {
+      "name": "Thunder Compute",
+      "slug": "thunder_compute",
+      "url": "https://www.thundercompute.com/",
+      "status": "implemented",
+      "api_key_required": true,
+      "pricing_types": ["on_demand"],
+      "gpu_count": 5,
+      "price_range": "$0.35–$2.49/hr"
+    },
+    {
+      "name": "Nebius",
+      "slug": "nebius",
+      "url": "https://nebius.com/services/compute",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand", "spot"],
+      "gpu_count": 7,
+      "price_range": "$0.74–$7.85/hr"
+    },
+    {
+      "name": "CUDO",
+      "slug": "cudo",
+      "url": "https://www.cudocompute.com/products/",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand"],
+      "gpu_count": 15,
+      "price_range": "$0.29–$2.47/hr"
+    },
+    {
+      "name": "DigitalOcean",
+      "slug": "digitalocean",
+      "url": "https://www.digitalocean.com/products/gpu-droplets",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand", "reservation"],
+      "gpu_count": 8,
+      "price_range": "$0.76–$5.65/hr"
+    },
+    {
+      "name": "OVH",
+      "slug": "ovh",
+      "url": "https://www.ovhcloud.com/en/public-cloud/gpu/",
+      "status": "candidate",
+      "api_key_required": false,
+      "pricing_types": ["on_demand"],
+      "gpu_count": 8,
+      "price_range": "$0.60–$3.08/hr"
+    },
+    {
+      "name": "Hetzner",
+      "slug": "hetzner",
+      "url": "https://www.hetzner.com/dedicated-rootserver/",
+      "status": "candidate",
+      "api_key_required": false,
+      "pricing_types": ["on_demand"],
+      "gpu_count": 2,
+      "price_range": "$0.34–$1.51/hr"
+    },
+    {
+      "name": "Scaleway",
+      "slug": "scaleway",
+      "url": "https://www.scaleway.com/en/gpu-instances/",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand"],
+      "gpu_count": 5,
+      "price_range": "$0.83–$2.93/hr"
+    },
+    {
+      "name": "Alibaba Cloud",
+      "slug": "alibaba",
+      "url": "https://www.alibabacloud.com/",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand", "reservation"],
+      "gpu_count": 4,
+      "price_range": "$0.62–$3.97/hr"
+    },
+    {
+      "name": "Cirrascale",
+      "slug": "cirrascale",
+      "url": "https://www.cirrascale.com/",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["reservation"],
+      "gpu_count": 9,
+      "price_range": "$0.28–$6.08/hr"
+    },
+    {
+      "name": "Together",
+      "slug": "together",
+      "url": "https://together.ai",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand"],
+      "gpu_count": 5,
+      "price_range": "$1.49–$4.99/hr"
+    },
+    {
+      "name": "Massed Compute",
+      "slug": "massed_compute",
+      "url": "https://vm.massedcompute.com/pricing",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand"],
+      "gpu_count": 10,
+      "price_range": "$0.35–$3.82/hr"
+    },
+    {
+      "name": "Sesterce",
+      "slug": "sesterce",
+      "url": "https://cloud.sesterce.com/compute",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand"],
+      "gpu_count": 17,
+      "price_range": "$0.54–$8.70/hr"
+    },
+    {
+      "name": "Database Mart",
+      "slug": "database_mart",
+      "url": "https://www.databasemart.com/gpu-server",
+      "status": "candidate",
+      "api_key_required": false,
+      "pricing_types": ["reservation"],
+      "gpu_count": 23,
+      "price_range": "$0.08–$3.61/hr"
+    },
+    {
+      "name": "Theta EdgeCloud",
+      "slug": "theta_edgecloud",
+      "url": "https://thetaedgecloud.com",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand"],
+      "gpu_count": 25,
+      "price_range": "$0.14–$650.10/hr"
+    },
+    {
+      "name": "Runcrate",
+      "slug": "runcrate",
+      "url": "https://www.runcrate.ai",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand"],
+      "gpu_count": 16,
+      "price_range": "$0.55–$8.48/hr"
+    },
+    {
+      "name": "Verda",
+      "slug": "verda",
+      "url": "https://verda.com/products",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand"],
+      "gpu_count": 10,
+      "price_range": "$0.17–$8.62/hr"
+    },
+    {
+      "name": "AceCloud",
+      "slug": "acecloud",
+      "url": "https://acecloud.ai/",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand"],
+      "gpu_count": 8,
+      "price_range": "$0.65–$5.11/hr"
+    },
+    {
+      "name": "Akamai Cloud",
+      "slug": "akamai",
+      "url": "https://www.akamai.com/products/gpu/",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand"],
+      "gpu_count": 3,
+      "price_range": "$0.52–$2.50/hr"
+    },
+    {
+      "name": "Beam",
+      "slug": "beam",
+      "url": "https://www.beam.cloud/",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand"],
+      "gpu_count": 3,
+      "price_range": "$1.61–$4.42/hr"
+    },
+    {
+      "name": "Cerebrium",
+      "slug": "cerebrium",
+      "url": "https://www.cerebrium.ai/pricing",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand"],
+      "gpu_count": 7,
+      "price_range": "$0.59–$3.30/hr"
+    },
+    {
+      "name": "Civo",
+      "slug": "civo",
+      "url": "https://www.civo.com/cloud-gpu",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand", "reservation", "spot"],
+      "gpu_count": 5,
+      "price_range": "$0.69–$4.49/hr"
+    },
+    {
+      "name": "Contabo",
+      "slug": "contabo",
+      "url": "https://contabo.com/en/gpu-cloud/",
+      "status": "candidate",
+      "api_key_required": false,
+      "pricing_types": ["reservation"],
+      "gpu_count": 3,
+      "price_range": "$1.17–$3.47/hr"
+    },
+    {
+      "name": "Fly.io",
+      "slug": "flyio",
+      "url": "https://fly.io/gpu",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand"],
+      "gpu_count": 3,
+      "price_range": "$1.25–$3.50/hr"
+    },
+    {
+      "name": "Gcore",
+      "slug": "gcore",
+      "url": "https://gcore.com/cloud/ai-gpu",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand", "reservation"],
+      "gpu_count": 5,
+      "price_range": "$1.09–$3.20/hr"
+    },
+    {
+      "name": "Koyeb",
+      "slug": "koyeb",
+      "url": "https://www.koyeb.com/ai",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand"],
+      "gpu_count": 9,
+      "price_range": "$0.50–$5.50/hr"
+    },
+    {
+      "name": "Novita",
+      "slug": "novita",
+      "url": "https://novita.ai/pricing",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand", "spot"],
+      "gpu_count": 7,
+      "price_range": "$0.11–$2.59/hr"
+    },
+    {
+      "name": "Nova Cloud",
+      "slug": "nova_cloud",
+      "url": "https://nova-cloud.ai/pricing",
+      "status": "implemented",
+      "api_key_required": false,
+      "pricing_types": ["on_demand", "reservation", "spot"],
+      "gpu_count": 3,
+      "price_range": "$0.14–$1.44/hr",
+      "notes": "Public API, no auth required. /search returns live availability."
+    },
+    {
+      "name": "Oblivus",
+      "slug": "oblivus",
+      "url": "https://oblivus.com/pricing/",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand"],
+      "gpu_count": 6,
+      "price_range": "$0.55–$3.99/hr"
+    },
+    {
+      "name": "Packet.ai",
+      "slug": "packet",
+      "url": "https://packet.ai/",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand", "reservation"],
+      "gpu_count": 6,
+      "price_range": "$0.42–$4.00/hr"
+    },
+    {
+      "name": "Replicate",
+      "slug": "replicate",
+      "url": "https://replicate.com/docs/guides/",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand"],
+      "gpu_count": 4,
+      "price_range": "$0.81–$5.49/hr"
+    },
+    {
+      "name": "SwissGPU",
+      "slug": "swissgpu",
+      "url": "https://www.swissgpu.ch/pricing",
+      "status": "candidate",
+      "api_key_required": false,
+      "pricing_types": ["on_demand"],
+      "gpu_count": 7,
+      "price_range": "$0.25–$1.27/hr"
+    },
+    {
+      "name": "Lyceum",
+      "slug": "lyceum",
+      "url": "https://lyceum.technology",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand", "reservation"],
+      "gpu_count": 8,
+      "price_range": "$0.39–$4.29/hr"
+    },
+    {
+      "name": "GPUhub",
+      "slug": "gpuhub",
+      "url": "https://www.gpuhub.com/",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand"],
+      "gpu_count": 5,
+      "price_range": "$0.26–$1.06/hr"
+    },
+    {
+      "name": "UpCloud",
+      "slug": "upcloud",
+      "url": "https://upcloud.com/products/gpu-servers/",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand"],
+      "gpu_count": 4,
+      "price_range": "$0.67–$5.23/hr"
+    },
+    {
+      "name": "Fal.ai",
+      "slug": "fal",
+      "url": "https://fal.ai/pricing",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand"],
+      "gpu_count": 4,
+      "price_range": "$0.99–$2.10/hr"
+    },
+    {
+      "name": "BreezeHost",
+      "slug": "breezehost",
+      "url": "https://breezehost.io/gpu/",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand", "spot"],
+      "gpu_count": 2,
+      "price_range": "$0.35/hr"
+    },
+    {
+      "name": "TensorWave",
+      "slug": "tensorwave",
+      "url": "https://tensorwave.com",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand"],
+      "gpu_count": 3,
+      "price_range": "$2.25/hr",
+      "notes": "AMD MI300X focus"
+    },
+    {
+      "name": "Jarvis Labs",
+      "slug": "jarvis_labs",
+      "url": "https://jarvislabs.ai/",
+      "status": "planned",
+      "api_key_required": true,
+      "pricing_types": ["on_demand"],
+      "gpu_count": null,
+      "price_range": null
+    },
+    {
+      "name": "Zenlayer",
+      "slug": "zenlayer",
+      "url": "https://www.zenlayer.com/gpu/",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand"],
+      "gpu_count": 1,
+      "price_range": "$0.62–$0.63/hr"
+    },
+    {
+      "name": "Leaseweb",
+      "slug": "leaseweb",
+      "url": "https://www.leaseweb.com/en/products-services/cloud/",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand"],
+      "gpu_count": 1,
+      "price_range": "$0.71–$1.89/hr"
+    },
+    {
+      "name": "Beyond.pl",
+      "slug": "beyond_pl",
+      "url": "https://www.beyond.pl/en/services/",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand", "reservation"],
+      "gpu_count": 1,
+      "price_range": "$5.10/hr"
+    },
+    {
+      "name": "Elastx",
+      "slug": "elastx",
+      "url": "https://elastx.se/en/gpu/",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand"],
+      "gpu_count": 4,
+      "price_range": "$0.96–$4.44/hr"
+    },
+    {
+      "name": "Enverge",
+      "slug": "enverge",
+      "url": "https://enverge.ai/gpu-pricing",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand"],
+      "gpu_count": 4,
+      "price_range": "$1.50–$7.50/hr"
+    },
+    {
+      "name": "GPUaaS",
+      "slug": "gpuaas",
+      "url": "https://gpuaas.com/",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand"],
+      "gpu_count": 3,
+      "price_range": null,
+      "notes": "Custom pricing"
+    },
+    {
+      "name": "Green AI Cloud",
+      "slug": "green_ai_cloud",
+      "url": "https://greenai.cloud",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["reservation"],
+      "gpu_count": 3,
+      "price_range": "$3.35/hr"
+    },
+    {
+      "name": "Hexabyte",
+      "slug": "hexabyte",
+      "url": "https://hexabyte.se/en/cloud/gpu/",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand"],
+      "gpu_count": 1,
+      "price_range": "$0.42–$0.56/hr"
+    },
+    {
+      "name": "Hostiko",
+      "slug": "hostiko",
+      "url": "https://hostiko.network/en/gpu",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["reservation"],
+      "gpu_count": 1,
+      "price_range": "$0.47–$0.48/hr"
+    },
+    {
+      "name": "Hot Aisle",
+      "slug": "hot_aisle",
+      "url": "https://hotaisle.xyz/",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand", "reservation"],
+      "gpu_count": 2,
+      "price_range": "$1.99–$3.39/hr"
+    },
+    {
+      "name": "Impossible Cloud",
+      "slug": "impossible_cloud",
+      "url": "https://www.impossiblecloud.com/baremetal",
+      "status": "candidate",
+      "api_key_required": true,
+      "pricing_types": ["on_demand"],
+      "gpu_count": 4,
+      "price_range": "$3.02–$3.66/hr"
+    }
+  ]
+}
