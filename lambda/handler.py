@@ -1250,6 +1250,109 @@ def fetch_thunder_compute_gpus():
     return results
 
 
+# ---------------------------------------------------------------------------
+# GPU pricing collection — Nova Cloud
+# ---------------------------------------------------------------------------
+
+NOVA_CLOUD_API_URL = "https://api.nova-cloud.ai"
+
+# Display name map for Nova Cloud's short GPU type codes
+_NOVA_GPU_NAMES = {
+    "4090":    "RTX 4090",
+    "5090":    "RTX 5090",
+    "pro6000": "RTX PRO 6000",
+    "a100":    "A100",
+    "h100":    "H100",
+    "l40s":    "L40S",
+}
+
+
+def fetch_nova_cloud_gpus():
+    """Fetch GPU offers from Nova Cloud (no auth required).
+
+    Uses /search for live availability + pricing, and /pricing as fallback
+    for GPU types that are listed but have no current offers.
+    """
+    search_data = http_get(f"{NOVA_CLOUD_API_URL}/search")
+    price_data = http_get(f"{NOVA_CLOUD_API_URL}/pricing")
+
+    if not search_data and not price_data:
+        print("  Nova Cloud: API returned no data")
+        return []
+
+    # Group /search offers by GPU type (single-GPU only for per-GPU pricing)
+    gpu_groups = {}
+    for offer in (search_data or []):
+        gpu_type = offer.get("gpu_type", "")
+        gpu_count = offer.get("gpu_count", 1)
+        if gpu_count != 1:
+            continue
+
+        if gpu_type not in gpu_groups:
+            gpu_groups[gpu_type] = {
+                "vram_gb": round((offer.get("gpu_ram_mb", 0)) / 1024),
+                "demand_prices": [],
+                "spot_prices": [],
+                "available": 0,
+                "total": 0,
+                "locations": set(),
+            }
+
+        g = gpu_groups[gpu_type]
+        price = offer.get("gpu_price_hourly", 0)
+        if price > 0:
+            g["demand_prices"].append(price)
+        spot = offer.get("interruptible_rate", 0)
+        if spot > 0:
+            g["spot_prices"].append(spot)
+        g["total"] += 1
+        if offer.get("available"):
+            g["available"] += 1
+        loc = offer.get("location", "")
+        if loc:
+            g["locations"].add(loc)
+
+    # Add any GPU types from /pricing not in /search (listed but no current offers)
+    if price_data and isinstance(price_data, dict):
+        for gpu_type, price in price_data.get("gpus", {}).items():
+            if gpu_type not in gpu_groups and price > 0:
+                gpu_groups[gpu_type] = {
+                    "vram_gb": 0,
+                    "demand_prices": [price],
+                    "spot_prices": [],
+                    "available": 0,
+                    "total": 0,
+                    "locations": set(),
+                }
+
+    results = []
+    for gpu_type, gdata in gpu_groups.items():
+        demand = gdata["demand_prices"]
+        spot = gdata["spot_prices"]
+        display_name = _NOVA_GPU_NAMES.get(gpu_type, gpu_type.upper())
+
+        results.append({
+            "name": display_name,
+            "vram_gb": gdata["vram_gb"],
+            "available": gdata["available"] > 0,
+            "available_count": gdata["available"],
+            "total_offers": gdata["total"],
+            "locations": sorted(gdata["locations"]),
+            "pricing": {
+                "min":        min(spot + demand) if (spot + demand) else 0,
+                "avg":        sum(demand) / len(demand) if demand else 0,
+                "demand_min": min(demand) if demand else None,
+                "demand_avg": sum(demand) / len(demand) if demand else None,
+                "spot_min":   min(spot) if spot else None,
+                "spot_avg":   sum(spot) / len(spot) if spot else None,
+            },
+        })
+
+    results.sort(key=lambda x: x["name"])
+    print(f"  Nova Cloud: {len(results)} GPU types ({sum(1 for r in results if r['available'])} available)")
+    return results
+
+
 def update_gpu_rollups(gpu_snapshot, today):
     """Append today's prices to per-GPU history files for all providers."""
 
@@ -1345,9 +1448,19 @@ def update_gpu_rollups(gpu_snapshot, today):
         "demand_avg": "demand_avg",
     })
 
+    # Nova Cloud — on-demand + spot (interruptible) pricing
+    _write_provider_rollup("nova_cloud", gpu_snapshot.get("nova_cloud", {}).get("gpus", []), today, {
+        "min":        "min",
+        "avg":        "avg",
+        "demand_min": "demand_min",
+        "demand_avg": "demand_avg",
+        "spot_min":   "spot_min",
+        "spot_avg":   "spot_avg",
+    })
+
     counts = {
         k: len(gpu_snapshot.get(k, {}).get("gpus", []))
-        for k in ("runpod", "vast", "lambda_labs", "tensordock", "vultr", "azure", "oracle", "aws", "thunder_compute")
+        for k in ("runpod", "vast", "lambda_labs", "tensordock", "vultr", "azure", "oracle", "aws", "thunder_compute", "nova_cloud")
     }
     print(f"GPU rollups updated: {counts}")
 
@@ -1570,6 +1683,7 @@ def handler(event, context):
     oracle_gpus          = fetch_oracle_gpus()
     aws_gpus             = fetch_aws_gpus()
     thunder_compute_gpus = fetch_thunder_compute_gpus()
+    nova_cloud_gpus      = fetch_nova_cloud_gpus()
 
     # Build snapshot — always write if at least one provider has data
     _provider_results = {
@@ -1582,6 +1696,7 @@ def handler(event, context):
         "oracle":          oracle_gpus,
         "aws":             aws_gpus,
         "thunder_compute": thunder_compute_gpus,
+        "nova_cloud":      nova_cloud_gpus,
     }
     any_data = any(gpus for gpus in _provider_results.values())
 
@@ -1597,6 +1712,7 @@ def handler(event, context):
             "oracle":      {"name": "Oracle Cloud",  "total_gpus": len(oracle_gpus),      "gpus": oracle_gpus},
             "aws":             {"name": "AWS EC2",           "total_gpus": len(aws_gpus),             "gpus": aws_gpus},
             "thunder_compute": {"name": "Thunder Compute",  "total_gpus": len(thunder_compute_gpus), "gpus": thunder_compute_gpus},
+            "nova_cloud":      {"name": "Nova Cloud",       "total_gpus": len(nova_cloud_gpus),      "gpus": nova_cloud_gpus},
         }
 
         # Carry forward last known data for any provider that returned nothing

@@ -435,11 +435,12 @@
       "name": "Nova Cloud",
       "slug": "nova_cloud",
       "url": "https://nova-cloud.ai/pricing",
-      "status": "candidate",
-      "api_key_required": true,
+      "status": "implemented",
+      "api_key_required": false,
       "pricing_types": ["on_demand", "reservation", "spot"],
-      "gpu_count": 2,
-      "price_range": "$0.14–$1.44/hr"
+      "gpu_count": 3,
+      "price_range": "$0.14–$1.44/hr",
+      "notes": "Public API, no auth required. /search returns live availability."
     },
     {
       "name": "Oblivus",
