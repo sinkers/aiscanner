@@ -1176,6 +1176,8 @@ def update_gpu_rollups(gpu_snapshot, today):
         "spot_avg":     "spot_avg",
         "demand_min":   "demand_min",
         "demand_avg":   "demand_avg",
+        "rentable_min": "rentable_min",
+        "rentable_avg": "rentable_avg",
     })
 
     # Lambda Labs — on-demand only, per-GPU pricing

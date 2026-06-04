@@ -735,6 +735,10 @@
     // ── Class-based main view ────────────────────────────────────────────────
 
     function renderClasses() {
+        // Destroy any open charts before rebuilding DOM
+        for (const [key, chart] of chartInstances) { chart.destroy(); }
+        chartInstances.clear();
+
         const flat = buildFlat();
         const filtered = applyFilters(flat);
         const hierarchy = buildHierarchy(filtered);
@@ -868,12 +872,19 @@
 
     // ── Toggle variant expansion ─────────────────────────────────────────────
 
+    function destroyChartsFor(vId) {
+        for (const suffix of ['_bar', '_line']) {
+            const key = vId + suffix;
+            if (chartInstances.has(key)) {
+                chartInstances.get(key).destroy();
+                chartInstances.delete(key);
+            }
+        }
+    }
+
     function toggleVariant(vId, className, variantKey) {
         if (expandedVariants.has(vId)) {
-            if (chartInstances.has(vId)) {
-                chartInstances.get(vId).destroy();
-                chartInstances.delete(vId);
-            }
+            destroyChartsFor(vId);
             expandedVariants.delete(vId);
         } else {
             expandedVariants.add(vId);
