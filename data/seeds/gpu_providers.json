@@ -92,7 +92,7 @@
       "name": "Google Cloud",
       "slug": "google_cloud",
       "url": "https://cloud.google.com/gpu",
-      "status": "planned",
+      "status": "implemented",
       "api_key_required": false,
       "pricing_types": ["on_demand", "reservation", "spot"],
       "gpu_count": 10,
@@ -103,7 +103,7 @@
       "name": "CoreWeave",
       "slug": "coreweave",
       "url": "https://coreweave.com/gpu-cloud",
-      "status": "planned",
+      "status": "implemented",
       "api_key_required": true,
       "pricing_types": ["on_demand", "spot"],
       "gpu_count": 10,
@@ -113,21 +113,23 @@
       "name": "FluidStack",
       "slug": "fluidstack",
       "url": "https://www.fluidstack.io/",
-      "status": "planned",
-      "api_key_required": true,
+      "status": "implemented",
+      "api_key_required": false,
       "pricing_types": ["on_demand"],
       "gpu_count": 5,
-      "price_range": "$1.30–$2.30/hr"
+      "price_range": "$0.80–$2.25/hr",
+      "notes": "API (api.fluidstack.io) currently offline; using static catalog. Key will be required when API resumes."
     },
     {
       "name": "DataCrunch",
       "slug": "datacrunch",
       "url": "https://datacrunch.io/",
-      "status": "planned",
-      "api_key_required": true,
-      "pricing_types": ["on_demand"],
-      "gpu_count": null,
-      "price_range": null
+      "status": "implemented",
+      "api_key_required": false,
+      "pricing_types": ["on_demand", "spot"],
+      "gpu_count": 13,
+      "price_range": "$0.17–$8.62/hr",
+      "notes": "Rebranded to Verda. Public API at api.datacrunch.io, no auth required."
     },
     {
       "name": "Paperspace",
@@ -324,11 +326,12 @@
       "name": "Verda",
       "slug": "verda",
       "url": "https://verda.com/products",
-      "status": "candidate",
-      "api_key_required": true,
-      "pricing_types": ["on_demand"],
-      "gpu_count": 10,
-      "price_range": "$0.17–$8.62/hr"
+      "status": "duplicate",
+      "api_key_required": false,
+      "pricing_types": ["on_demand", "spot"],
+      "gpu_count": 13,
+      "price_range": "$0.17–$8.62/hr",
+      "notes": "Verda IS DataCrunch (rebranded). datacrunch.io redirects to verda.com. Covered by datacrunch integration."
     },
     {
       "name": "AceCloud",
@@ -546,11 +549,12 @@
       "name": "Jarvis Labs",
       "slug": "jarvis_labs",
       "url": "https://jarvislabs.ai/",
-      "status": "planned",
-      "api_key_required": true,
+      "status": "implemented",
+      "api_key_required": false,
       "pricing_types": ["on_demand"],
-      "gpu_count": null,
-      "price_range": null
+      "gpu_count": 7,
+      "price_range": "$0.41–$3.99/hr",
+      "notes": "API behind auth and currently unreachable; using static catalog."
     },
     {
       "name": "Zenlayer",
