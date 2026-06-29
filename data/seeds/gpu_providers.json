@@ -114,10 +114,11 @@
       "slug": "fluidstack",
       "url": "https://www.fluidstack.io/",
       "status": "implemented",
-      "api_key_required": true,
+      "api_key_required": false,
       "pricing_types": ["on_demand"],
       "gpu_count": 5,
-      "price_range": "$1.30–$2.30/hr"
+      "price_range": "$0.80–$2.25/hr",
+      "notes": "API (api.fluidstack.io) currently offline; using static catalog. Key will be required when API resumes."
     },
     {
       "name": "DataCrunch",
@@ -549,10 +550,11 @@
       "slug": "jarvis_labs",
       "url": "https://jarvislabs.ai/",
       "status": "implemented",
-      "api_key_required": true,
+      "api_key_required": false,
       "pricing_types": ["on_demand"],
-      "gpu_count": null,
-      "price_range": null
+      "gpu_count": 7,
+      "price_range": "$0.41–$3.99/hr",
+      "notes": "API behind auth and currently unreachable; using static catalog."
     },
     {
       "name": "Zenlayer",

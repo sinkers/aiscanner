@@ -318,6 +318,21 @@ class TestDataCrunchLiveAPI(unittest.TestCase):
 class TestProviderConsistency(unittest.TestCase):
     """Verify all providers return data in a consistent schema."""
 
+    MOCK_DATACRUNCH = [
+        {
+            "model": "H100", "name": "H100 SXM5 80GB",
+            "gpu": {"number_of_gpus": 1},
+            "gpu_memory": {"size_in_gigabytes": 80},
+            "price_per_hour": "3.25", "spot_price": "1.14",
+        },
+        {
+            "model": "A100 80GB", "name": "A100 SXM4 80GB",
+            "gpu": {"number_of_gpus": 1},
+            "gpu_memory": {"size_in_gigabytes": 80},
+            "price_per_hour": "1.79", "spot_price": "0.63",
+        },
+    ]
+
     PROVIDERS = [
         ("Google Cloud", handler.fetch_google_cloud_gpus),
         ("CoreWeave", handler.fetch_coreweave_gpus),
@@ -325,15 +340,24 @@ class TestProviderConsistency(unittest.TestCase):
         ("Jarvis Labs", handler.fetch_jarvislabs_gpus),
     ]
 
+    def _datacrunch_mocked(self):
+        """Return DataCrunch results using mocked API data."""
+        with patch.object(handler, "http_get", return_value=self.MOCK_DATACRUNCH):
+            return handler.fetch_datacrunch_gpus()
+
+    def _all_providers(self):
+        """All providers including DataCrunch (mocked)."""
+        return self.PROVIDERS + [("DataCrunch", self._datacrunch_mocked)]
+
     def test_all_return_lists(self):
-        for name, fn in self.PROVIDERS:
+        for name, fn in self._all_providers():
             with self.subTest(provider=name):
-                result = fn()
+                result = fn() if not callable(getattr(fn, '__self__', None)) else fn()
                 self.assertIsInstance(result, list)
                 self.assertGreater(len(result), 0)
 
     def test_all_have_consistent_schema(self):
-        for name, fn in self.PROVIDERS:
+        for name, fn in self._all_providers():
             with self.subTest(provider=name):
                 for gpu in fn():
                     self.assertIsInstance(gpu["name"], str)
@@ -343,7 +367,7 @@ class TestProviderConsistency(unittest.TestCase):
 
     def test_all_prices_reasonable(self):
         """Sanity check: GPU prices should be between $0.01 and $100/hr."""
-        for name, fn in self.PROVIDERS:
+        for name, fn in self._all_providers():
             with self.subTest(provider=name):
                 for gpu in fn():
                     p = gpu["pricing"]
@@ -353,7 +377,7 @@ class TestProviderConsistency(unittest.TestCase):
 
     def test_all_vram_reasonable(self):
         """Sanity check: VRAM should be between 4GB and 512GB."""
-        for name, fn in self.PROVIDERS:
+        for name, fn in self._all_providers():
             with self.subTest(provider=name):
                 for gpu in fn():
                     vram = gpu["vram_gb"]
@@ -361,7 +385,7 @@ class TestProviderConsistency(unittest.TestCase):
                     self.assertLessEqual(vram, 512, f"{gpu['name']} VRAM too high")
 
     def test_all_sorted_by_name(self):
-        for name, fn in self.PROVIDERS:
+        for name, fn in self._all_providers():
             with self.subTest(provider=name):
                 results = fn()
                 names = [r["name"] for r in results]

@@ -40,5 +40,10 @@ infra/cdk.out/
 webapp/index_standalone.html
 webapp/index_standalone_backup.html
 
+# Local rollup data (S3 in production, local files from make invoke / testing)
+rollups/
+webapp/rollups/
+
 # Separate sub-projects
 agent-test-harness/
+.gstack/
