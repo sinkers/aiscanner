@@ -501,6 +501,10 @@ _GPU_NAME_MAP = {
     "MI300X":                 "MI300X",
 }
 
+# MIG (Multi-Instance GPU) partitions should stay as distinct names
+# so they don't get grouped with the full GPU.
+_GPU_MIG_PATTERN = re.compile(r"\bMIG\b", re.IGNORECASE)
+
 
 def normalize_gpu_name(raw_name):
     """Normalize a GPU name to a canonical form for cross-provider comparison.
@@ -514,6 +518,12 @@ def normalize_gpu_name(raw_name):
     for prefix in ("NVIDIA ", "AMD "):
         if name.startswith(prefix):
             name = name[len(prefix):]
+
+    # MIG partitions are separate products — keep them distinct
+    if _GPU_MIG_PATTERN.search(name):
+        # Just strip trailing VRAM for consistency: "PRO 6000 MIG 24GB" → "PRO 6000 MIG 24GB"
+        # Keep the MIG size in the name since different slices have different VRAM
+        return name
 
     # Strip trailing VRAM (e.g. "80GB", "48GB") and SXM version numbers
     for pattern, repl in _GPU_NAME_STRIP_PATTERNS:
@@ -853,9 +863,15 @@ def fetch_vultr_gpus():
         # "NVIDIA_A16" → "A16", "AMD_MI300X" → "AMD MI300X"
         clean = gpu_type.replace("NVIDIA_", "").replace("AMD_", "AMD ").replace("_", " ")
         vram_per_gpu = plan.get("gpu_vram_gb", 0)
-        gpu_count = plan.get("gpu_count", 1) or 1
+        try:
+            gpu_count = int(plan.get("gpu_count", 1) or 1)
+        except (ValueError, TypeError):
+            gpu_count = 1
         total_vram = vram_per_gpu * gpu_count
-        hourly = plan.get("hourly_cost", 0) or 0
+        try:
+            hourly = float(plan.get("hourly_cost", 0) or 0)
+        except (ValueError, TypeError):
+            hourly = 0
         price_per_gpu = hourly / gpu_count if gpu_count else hourly
 
         if clean not in gpu_groups:
