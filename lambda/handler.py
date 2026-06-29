@@ -21,7 +21,9 @@ GPU API keys (optional — set via SSM /dame/gpu/* or env var fallback):
   LAMBDA_LABS_API_KEY     Lambda Labs REST API key
 
 No-auth providers (always collected):
-  TensorDock, Vultr, Azure
+  TensorDock, Vultr, Azure, Oracle, AWS, Nova Cloud, DataCrunch/Verda,
+  Google Cloud (static), CoreWeave (static), FluidStack (static),
+  Jarvis Labs (static)
 
 ==============================================================================
 HISTORICAL DATA PROTECTION — DO NOT REMOVE OR MODIFY THESE INVARIANTS
