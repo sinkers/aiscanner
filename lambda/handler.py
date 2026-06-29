@@ -1354,6 +1354,269 @@ def fetch_nova_cloud_gpus():
     return results
 
 
+# ---------------------------------------------------------------------------
+# GPU pricing collection — Google Cloud (static catalog, no auth)
+# ---------------------------------------------------------------------------
+
+# Google Cloud GPU pricing (us-central1, on-demand + spot)
+# Source: https://cloud.google.com/compute/vm-instance-pricing
+_GOOGLE_CLOUD_GPUS = [
+    {"name": "NVIDIA H100 80GB",  "vram_gb": 80,  "demand": 10.90, "spot": 3.67},
+    {"name": "NVIDIA A100 80GB",  "vram_gb": 80,  "demand": 5.07,  "spot": 1.52},
+    {"name": "NVIDIA A100 40GB",  "vram_gb": 40,  "demand": 3.67,  "spot": 1.10},
+    {"name": "NVIDIA L4",         "vram_gb": 24,  "demand": 0.81,  "spot": 0.24},
+    {"name": "NVIDIA T4",         "vram_gb": 16,  "demand": 0.35,  "spot": 0.11},
+    {"name": "NVIDIA V100",       "vram_gb": 16,  "demand": 2.48,  "spot": 0.74},
+    {"name": "NVIDIA P100",       "vram_gb": 16,  "demand": 1.46,  "spot": 0.44},
+    {"name": "NVIDIA P4",         "vram_gb": 8,   "demand": 0.60,  "spot": 0.18},
+    {"name": "NVIDIA K80",        "vram_gb": 12,  "demand": 0.45,  "spot": 0.13},
+    {"name": "NVIDIA H200 141GB", "vram_gb": 141, "demand": 16.11, "spot": 4.83},
+]
+
+
+def fetch_google_cloud_gpus():
+    """Return Google Cloud GPU pricing from static catalog.
+
+    Google Cloud Compute Engine requires OAuth for their API, so we maintain
+    a static pricing catalog from their published pricing page. Prices are
+    per-GPU per-hour for us-central1.
+    """
+    results = []
+    for gpu in _GOOGLE_CLOUD_GPUS:
+        results.append({
+            "name": gpu["name"],
+            "vram_gb": gpu["vram_gb"],
+            "pricing": {
+                "min":        gpu["spot"],
+                "avg":        gpu["demand"],
+                "demand_min": gpu["demand"],
+                "demand_avg": gpu["demand"],
+                "spot_min":   gpu["spot"],
+                "spot_avg":   gpu["spot"],
+            },
+        })
+    results.sort(key=lambda x: x["name"])
+    print(f"  Google Cloud: {len(results)} GPU types (static catalog)")
+    return results
+
+
+# ---------------------------------------------------------------------------
+# GPU pricing collection — CoreWeave (static catalog, no public API)
+# ---------------------------------------------------------------------------
+
+# CoreWeave GPU pricing (per-GPU per-hour)
+# Source: https://www.coreweave.com/pricing
+# Note: CoreWeave sells in multi-GPU packs; prices below are per-GPU
+_COREWEAVE_GPUS = [
+    {"name": "NVIDIA GB200 NVL72",      "vram_gb": 186, "demand": 10.50, "spot": None},
+    {"name": "NVIDIA HGX B200",         "vram_gb": 180, "demand": 8.60,  "spot": 4.26},
+    {"name": "NVIDIA HGX B300",         "vram_gb": 270, "demand": None,  "spot": 4.48},
+    {"name": "RTX PRO 6000 Blackwell",  "vram_gb": 96,  "demand": 2.50,  "spot": 1.39},
+    {"name": "NVIDIA HGX H100",         "vram_gb": 80,  "demand": 6.16,  "spot": 2.46},
+    {"name": "NVIDIA HGX H200",         "vram_gb": 141, "demand": 6.31,  "spot": 2.62},
+    {"name": "NVIDIA GH200",            "vram_gb": 96,  "demand": 6.50,  "spot": None},
+    {"name": "NVIDIA L40",              "vram_gb": 48,  "demand": 1.25,  "spot": 0.78},
+    {"name": "NVIDIA L40S",             "vram_gb": 48,  "demand": 2.25,  "spot": 0.99},
+    {"name": "NVIDIA A100 80GB",        "vram_gb": 80,  "demand": 2.70,  "spot": 1.21},
+]
+
+
+def fetch_coreweave_gpus():
+    """Return CoreWeave GPU pricing from static catalog.
+
+    CoreWeave has no public pricing API. Prices maintained from their
+    published pricing page; per-GPU rates derived from multi-GPU packs.
+    """
+    results = []
+    for gpu in _COREWEAVE_GPUS:
+        demand = gpu["demand"]
+        spot = gpu["spot"]
+        all_prices = [p for p in (demand, spot) if p is not None]
+        if not all_prices:
+            continue
+
+        pricing = {
+            "min": min(all_prices),
+            "avg": max(all_prices),
+        }
+        if demand is not None:
+            pricing["demand_min"] = demand
+            pricing["demand_avg"] = demand
+        if spot is not None:
+            pricing["spot_min"] = spot
+            pricing["spot_avg"] = spot
+
+        results.append({
+            "name": gpu["name"],
+            "vram_gb": gpu["vram_gb"],
+            "pricing": pricing,
+        })
+
+    results.sort(key=lambda x: x["name"])
+    print(f"  CoreWeave: {len(results)} GPU types (static catalog)")
+    return results
+
+
+# ---------------------------------------------------------------------------
+# GPU pricing collection — FluidStack (static catalog, API offline)
+# ---------------------------------------------------------------------------
+
+# FluidStack GPU pricing (per-GPU per-hour, on-demand)
+# Source: https://www.fluidstack.io/pricing (API at api.fluidstack.io is offline)
+_FLUIDSTACK_GPUS = [
+    {"name": "NVIDIA H100 SXM",  "vram_gb": 80,  "demand": 2.25},
+    {"name": "NVIDIA H100 PCIe", "vram_gb": 80,  "demand": 2.05},
+    {"name": "NVIDIA A100 80GB", "vram_gb": 80,  "demand": 1.30},
+    {"name": "NVIDIA A100 40GB", "vram_gb": 40,  "demand": 0.80},
+    {"name": "NVIDIA L40S",      "vram_gb": 48,  "demand": 1.20},
+]
+
+
+def fetch_fluidstack_gpus():
+    """Return FluidStack GPU pricing from static catalog.
+
+    FluidStack's API (api.fluidstack.io) is currently offline. Prices
+    maintained from their published pricing page. On-demand only.
+    """
+    results = []
+    for gpu in _FLUIDSTACK_GPUS:
+        results.append({
+            "name": gpu["name"],
+            "vram_gb": gpu["vram_gb"],
+            "pricing": {
+                "min":        gpu["demand"],
+                "avg":        gpu["demand"],
+                "demand_min": gpu["demand"],
+                "demand_avg": gpu["demand"],
+            },
+        })
+    results.sort(key=lambda x: x["name"])
+    print(f"  FluidStack: {len(results)} GPU types (static catalog)")
+    return results
+
+
+# ---------------------------------------------------------------------------
+# GPU pricing collection — DataCrunch / Verda (public API, no auth)
+# ---------------------------------------------------------------------------
+
+DATACRUNCH_API_URL = "https://api.datacrunch.io/v1/instance-types"
+
+
+def fetch_datacrunch_gpus():
+    """Fetch GPU instance types and pricing from DataCrunch/Verda API (no auth).
+
+    The DataCrunch API returns all instance types including multi-GPU configs.
+    We filter to single-GPU entries for per-GPU pricing, then aggregate by
+    GPU model for min/avg/spot prices.
+    """
+    data = http_get(DATACRUNCH_API_URL)
+    if not data or not isinstance(data, list):
+        print("  DataCrunch: API returned no data")
+        return []
+
+    gpu_groups = {}
+    for instance in data:
+        gpu_info = instance.get("gpu", {})
+        num_gpus = gpu_info.get("number_of_gpus", 1)
+        if num_gpus != 1:
+            continue  # skip multi-GPU for per-GPU pricing
+
+        model = instance.get("model", "")
+        name = instance.get("name", model)
+        vram = instance.get("gpu_memory", {}).get("size_in_gigabytes", 0)
+
+        price_str = instance.get("price_per_hour", "0")
+        spot_str = instance.get("spot_price", "0")
+        try:
+            price = float(price_str)
+            spot = float(spot_str)
+        except (ValueError, TypeError):
+            continue
+
+        if model not in gpu_groups:
+            gpu_groups[model] = {
+                "name": name,
+                "vram_gb": vram,
+                "demand_prices": [],
+                "spot_prices": [],
+            }
+
+        if price > 0:
+            gpu_groups[model]["demand_prices"].append(price)
+        if spot > 0:
+            gpu_groups[model]["spot_prices"].append(spot)
+
+    results = []
+    for model, gdata in gpu_groups.items():
+        demand = gdata["demand_prices"]
+        spot = gdata["spot_prices"]
+        all_prices = demand + spot
+        if not all_prices:
+            continue
+
+        pricing = {
+            "min": min(all_prices),
+            "avg": sum(demand) / len(demand) if demand else min(all_prices),
+            "max": max(all_prices),
+        }
+        if demand:
+            pricing["demand_min"] = min(demand)
+            pricing["demand_avg"] = sum(demand) / len(demand)
+        if spot:
+            pricing["spot_min"] = min(spot)
+            pricing["spot_avg"] = sum(spot) / len(spot)
+
+        results.append({
+            "name": gdata["name"],
+            "vram_gb": gdata["vram_gb"],
+            "pricing": pricing,
+        })
+
+    results.sort(key=lambda x: x["name"])
+    print(f"  DataCrunch: {len(results)} GPU types from API")
+    return results
+
+
+# ---------------------------------------------------------------------------
+# GPU pricing collection — Jarvis Labs (static catalog, API unavailable)
+# ---------------------------------------------------------------------------
+
+# Jarvis Labs GPU pricing (per-GPU per-hour, on-demand)
+# Source: https://jarvislabs.ai/pricing
+_JARVISLABS_GPUS = [
+    {"name": "NVIDIA H200 SXM",          "vram_gb": 141, "demand": 3.99},
+    {"name": "NVIDIA H100 SXM",          "vram_gb": 80,  "demand": 2.69},
+    {"name": "RTX PRO 6000 Blackwell",   "vram_gb": 96,  "demand": 1.89},
+    {"name": "NVIDIA A100 80GB",         "vram_gb": 80,  "demand": 1.49},
+    {"name": "NVIDIA A100 40GB",         "vram_gb": 40,  "demand": 0.89},
+    {"name": "NVIDIA A30",               "vram_gb": 24,  "demand": 0.41},
+    {"name": "NVIDIA L4",                "vram_gb": 24,  "demand": 0.44},
+]
+
+
+def fetch_jarvislabs_gpus():
+    """Return Jarvis Labs GPU pricing from static catalog.
+
+    Jarvis Labs API is behind auth and currently unreachable. Prices
+    maintained from their published pricing page. On-demand only.
+    """
+    results = []
+    for gpu in _JARVISLABS_GPUS:
+        results.append({
+            "name": gpu["name"],
+            "vram_gb": gpu["vram_gb"],
+            "pricing": {
+                "min":        gpu["demand"],
+                "avg":        gpu["demand"],
+                "demand_min": gpu["demand"],
+                "demand_avg": gpu["demand"],
+            },
+        })
+    results.sort(key=lambda x: x["name"])
+    print(f"  Jarvis Labs: {len(results)} GPU types (static catalog)")
+    return results
+
+
 def update_gpu_rollups(gpu_snapshot, today):
     """Append today's prices to per-GPU history files for all providers."""
 
@@ -1459,9 +1722,61 @@ def update_gpu_rollups(gpu_snapshot, today):
         "spot_avg":   "spot_avg",
     })
 
+    # Google Cloud — on-demand + spot
+    _write_provider_rollup("google_cloud", gpu_snapshot.get("google_cloud", {}).get("gpus", []), today, {
+        "min":        "min",
+        "avg":        "avg",
+        "demand_min": "demand_min",
+        "demand_avg": "demand_avg",
+        "spot_min":   "spot_min",
+        "spot_avg":   "spot_avg",
+    })
+
+    # CoreWeave — on-demand + spot
+    _write_provider_rollup("coreweave", gpu_snapshot.get("coreweave", {}).get("gpus", []), today, {
+        "min":        "min",
+        "avg":        "avg",
+        "demand_min": "demand_min",
+        "demand_avg": "demand_avg",
+        "spot_min":   "spot_min",
+        "spot_avg":   "spot_avg",
+    })
+
+    # FluidStack — on-demand only
+    _write_provider_rollup("fluidstack", gpu_snapshot.get("fluidstack", {}).get("gpus", []), today, {
+        "min":        "min",
+        "avg":        "avg",
+        "demand_min": "demand_min",
+        "demand_avg": "demand_avg",
+    })
+
+    # DataCrunch/Verda — on-demand + spot
+    _write_provider_rollup("datacrunch", gpu_snapshot.get("datacrunch", {}).get("gpus", []), today, {
+        "min":        "min",
+        "avg":        "avg",
+        "max":        "max",
+        "demand_min": "demand_min",
+        "demand_avg": "demand_avg",
+        "spot_min":   "spot_min",
+        "spot_avg":   "spot_avg",
+    })
+
+    # Jarvis Labs — on-demand only
+    _write_provider_rollup("jarvis_labs", gpu_snapshot.get("jarvis_labs", {}).get("gpus", []), today, {
+        "min":        "min",
+        "avg":        "avg",
+        "demand_min": "demand_min",
+        "demand_avg": "demand_avg",
+    })
+
+    _all_providers = (
+        "runpod", "vast", "lambda_labs", "tensordock", "vultr", "azure",
+        "oracle", "aws", "thunder_compute", "nova_cloud",
+        "google_cloud", "coreweave", "fluidstack", "datacrunch", "jarvis_labs",
+    )
     counts = {
         k: len(gpu_snapshot.get(k, {}).get("gpus", []))
-        for k in ("runpod", "vast", "lambda_labs", "tensordock", "vultr", "azure", "oracle", "aws", "thunder_compute", "nova_cloud")
+        for k in _all_providers
     }
     print(f"GPU rollups updated: {counts}")
 
@@ -1685,6 +2000,11 @@ def handler(event, context):
     aws_gpus             = fetch_aws_gpus()
     thunder_compute_gpus = fetch_thunder_compute_gpus()
     nova_cloud_gpus      = fetch_nova_cloud_gpus()
+    google_cloud_gpus    = fetch_google_cloud_gpus()
+    coreweave_gpus       = fetch_coreweave_gpus()
+    fluidstack_gpus      = fetch_fluidstack_gpus()
+    datacrunch_gpus      = fetch_datacrunch_gpus()
+    jarvis_labs_gpus     = fetch_jarvislabs_gpus()
 
     # Build snapshot — always write if at least one provider has data
     _provider_results = {
@@ -1698,22 +2018,32 @@ def handler(event, context):
         "aws":             aws_gpus,
         "thunder_compute": thunder_compute_gpus,
         "nova_cloud":      nova_cloud_gpus,
+        "google_cloud":    google_cloud_gpus,
+        "coreweave":       coreweave_gpus,
+        "fluidstack":      fluidstack_gpus,
+        "datacrunch":      datacrunch_gpus,
+        "jarvis_labs":     jarvis_labs_gpus,
     }
     any_data = any(gpus for gpus in _provider_results.values())
 
     if any_data:
         gpu_snapshot = {
             "generated_at": datetime.now(timezone.utc).isoformat(),
-            "runpod":      {"name": "RunPod",        "total_gpus": len(runpod_gpus),      "gpus": runpod_gpus},
-            "vast":        {"name": "Vast.ai",       "total_gpus": len(vast_gpus),        "gpus": vast_gpus},
-            "lambda_labs": {"name": "Lambda Labs",   "total_gpus": len(lambdalabs_gpus),  "gpus": lambdalabs_gpus},
-            "tensordock":  {"name": "TensorDock",    "total_gpus": len(tensordock_gpus),  "gpus": tensordock_gpus},
-            "vultr":       {"name": "Vultr",         "total_gpus": len(vultr_gpus),       "gpus": vultr_gpus},
-            "azure":       {"name": "Azure",         "total_gpus": len(azure_gpus),       "gpus": azure_gpus},
-            "oracle":      {"name": "Oracle Cloud",  "total_gpus": len(oracle_gpus),      "gpus": oracle_gpus},
-            "aws":             {"name": "AWS EC2",           "total_gpus": len(aws_gpus),             "gpus": aws_gpus},
+            "runpod":          {"name": "RunPod",           "total_gpus": len(runpod_gpus),          "gpus": runpod_gpus},
+            "vast":            {"name": "Vast.ai",          "total_gpus": len(vast_gpus),            "gpus": vast_gpus},
+            "lambda_labs":     {"name": "Lambda Labs",      "total_gpus": len(lambdalabs_gpus),      "gpus": lambdalabs_gpus},
+            "tensordock":      {"name": "TensorDock",       "total_gpus": len(tensordock_gpus),      "gpus": tensordock_gpus},
+            "vultr":           {"name": "Vultr",            "total_gpus": len(vultr_gpus),           "gpus": vultr_gpus},
+            "azure":           {"name": "Azure",            "total_gpus": len(azure_gpus),           "gpus": azure_gpus},
+            "oracle":          {"name": "Oracle Cloud",     "total_gpus": len(oracle_gpus),          "gpus": oracle_gpus},
+            "aws":             {"name": "AWS EC2",          "total_gpus": len(aws_gpus),             "gpus": aws_gpus},
             "thunder_compute": {"name": "Thunder Compute",  "total_gpus": len(thunder_compute_gpus), "gpus": thunder_compute_gpus},
             "nova_cloud":      {"name": "Nova Cloud",       "total_gpus": len(nova_cloud_gpus),      "gpus": nova_cloud_gpus},
+            "google_cloud":    {"name": "Google Cloud",     "total_gpus": len(google_cloud_gpus),    "gpus": google_cloud_gpus},
+            "coreweave":       {"name": "CoreWeave",        "total_gpus": len(coreweave_gpus),       "gpus": coreweave_gpus},
+            "fluidstack":      {"name": "FluidStack",       "total_gpus": len(fluidstack_gpus),      "gpus": fluidstack_gpus},
+            "datacrunch":      {"name": "DataCrunch",       "total_gpus": len(datacrunch_gpus),      "gpus": datacrunch_gpus},
+            "jarvis_labs":     {"name": "Jarvis Labs",      "total_gpus": len(jarvis_labs_gpus),     "gpus": jarvis_labs_gpus},
         }
 
         # Carry forward last known data for any provider that returned nothing
