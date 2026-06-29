@@ -1,5 +1,5 @@
 """
-Tests for the 5 new GPU provider integrations.
+Tests for GPU provider integrations.
 
 Tests are split into:
   - Unit tests: validate static catalog data (no network)
@@ -184,6 +184,293 @@ class TestJarvisLabsGpus(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# Unit tests — Batch 1 static catalog providers (no network)
+# ---------------------------------------------------------------------------
+
+
+class TestPaperspaceGpus(unittest.TestCase):
+    """Test Paperspace static catalog."""
+
+    def test_returns_expected_count(self):
+        results = handler.fetch_paperspace_gpus()
+        self.assertEqual(len(results), 12)
+
+    def test_all_have_required_fields(self):
+        for gpu in handler.fetch_paperspace_gpus():
+            self.assertIn("name", gpu)
+            self.assertIn("vram_gb", gpu)
+            self.assertIn("pricing", gpu)
+            self.assertGreater(gpu["vram_gb"], 0)
+
+    def test_demand_only_no_spot(self):
+        for gpu in handler.fetch_paperspace_gpus():
+            p = gpu["pricing"]
+            self.assertIn("demand_min", p)
+            self.assertNotIn("spot_min", p)
+
+    def test_sorted_by_name(self):
+        results = handler.fetch_paperspace_gpus()
+        names = [r["name"] for r in results]
+        self.assertEqual(names, sorted(names))
+
+    def test_known_gpus_present(self):
+        names = {r["name"] for r in handler.fetch_paperspace_gpus()}
+        for expected in ["NVIDIA H100", "NVIDIA A6000", "NVIDIA V100"]:
+            self.assertIn(expected, names)
+
+
+class TestSaladGpus(unittest.TestCase):
+    """Test SaladCloud static catalog."""
+
+    def test_returns_expected_count(self):
+        results = handler.fetch_salad_gpus()
+        self.assertEqual(len(results), 11)
+
+    def test_all_have_required_fields(self):
+        for gpu in handler.fetch_salad_gpus():
+            self.assertIn("name", gpu)
+            self.assertIn("vram_gb", gpu)
+            self.assertIn("pricing", gpu)
+            self.assertGreater(gpu["vram_gb"], 0)
+
+    def test_demand_only_no_spot(self):
+        for gpu in handler.fetch_salad_gpus():
+            p = gpu["pricing"]
+            self.assertIn("demand_min", p)
+            self.assertNotIn("spot_min", p)
+
+    def test_very_low_prices(self):
+        """Salad uses consumer GPUs — prices should be very low."""
+        for gpu in handler.fetch_salad_gpus():
+            self.assertLess(gpu["pricing"]["min"], 1.0,
+                            f"{gpu['name']} price should be under $1/hr")
+
+    def test_sorted_by_name(self):
+        results = handler.fetch_salad_gpus()
+        names = [r["name"] for r in results]
+        self.assertEqual(names, sorted(names))
+
+
+class TestCrusoeGpus(unittest.TestCase):
+    """Test Crusoe static catalog."""
+
+    def test_returns_expected_count(self):
+        results = handler.fetch_crusoe_gpus()
+        self.assertEqual(len(results), 6)
+
+    def test_all_have_required_fields(self):
+        for gpu in handler.fetch_crusoe_gpus():
+            self.assertIn("name", gpu)
+            self.assertIn("vram_gb", gpu)
+            self.assertIn("pricing", gpu)
+            self.assertGreater(gpu["vram_gb"], 0)
+
+    def test_demand_only_no_spot(self):
+        for gpu in handler.fetch_crusoe_gpus():
+            p = gpu["pricing"]
+            self.assertIn("demand_min", p)
+            self.assertNotIn("spot_min", p)
+
+    def test_has_amd(self):
+        """Crusoe offers AMD MI300X."""
+        names = {r["name"] for r in handler.fetch_crusoe_gpus()}
+        self.assertIn("AMD MI300X", names)
+
+    def test_sorted_by_name(self):
+        results = handler.fetch_crusoe_gpus()
+        names = [r["name"] for r in results]
+        self.assertEqual(names, sorted(names))
+
+
+class TestHyperstackGpus(unittest.TestCase):
+    """Test Hyperstack static catalog."""
+
+    def test_returns_expected_count(self):
+        results = handler.fetch_hyperstack_gpus()
+        self.assertEqual(len(results), 11)
+
+    def test_all_have_required_fields(self):
+        for gpu in handler.fetch_hyperstack_gpus():
+            self.assertIn("name", gpu)
+            self.assertIn("vram_gb", gpu)
+            self.assertIn("pricing", gpu)
+            self.assertGreater(gpu["vram_gb"], 0)
+
+    def test_demand_only_no_spot(self):
+        for gpu in handler.fetch_hyperstack_gpus():
+            p = gpu["pricing"]
+            self.assertIn("demand_min", p)
+            self.assertNotIn("spot_min", p)
+
+    def test_sorted_by_name(self):
+        results = handler.fetch_hyperstack_gpus()
+        names = [r["name"] for r in results]
+        self.assertEqual(names, sorted(names))
+
+
+class TestNebiusGpus(unittest.TestCase):
+    """Test Nebius static catalog."""
+
+    def test_returns_expected_count(self):
+        results = handler.fetch_nebius_gpus()
+        self.assertEqual(len(results), 6)
+
+    def test_all_have_required_fields(self):
+        for gpu in handler.fetch_nebius_gpus():
+            self.assertIn("name", gpu)
+            self.assertIn("vram_gb", gpu)
+            self.assertIn("pricing", gpu)
+            self.assertGreater(gpu["vram_gb"], 0)
+
+    def test_demand_only_no_spot(self):
+        for gpu in handler.fetch_nebius_gpus():
+            p = gpu["pricing"]
+            self.assertIn("demand_min", p)
+            self.assertNotIn("spot_min", p)
+
+    def test_has_latest_gen(self):
+        """Nebius offers B200 and B300."""
+        names = {r["name"] for r in handler.fetch_nebius_gpus()}
+        self.assertIn("NVIDIA B200 SXM", names)
+        self.assertIn("NVIDIA B300 SXM", names)
+
+    def test_sorted_by_name(self):
+        results = handler.fetch_nebius_gpus()
+        names = [r["name"] for r in results]
+        self.assertEqual(names, sorted(names))
+
+
+class TestDigitalOceanGpus(unittest.TestCase):
+    """Test DigitalOcean static catalog."""
+
+    def test_returns_expected_count(self):
+        results = handler.fetch_digitalocean_gpus()
+        self.assertEqual(len(results), 4)
+
+    def test_all_have_required_fields(self):
+        for gpu in handler.fetch_digitalocean_gpus():
+            self.assertIn("name", gpu)
+            self.assertIn("vram_gb", gpu)
+            self.assertIn("pricing", gpu)
+            self.assertGreater(gpu["vram_gb"], 0)
+
+    def test_demand_only_no_spot(self):
+        for gpu in handler.fetch_digitalocean_gpus():
+            p = gpu["pricing"]
+            self.assertIn("demand_min", p)
+            self.assertNotIn("spot_min", p)
+
+    def test_sorted_by_name(self):
+        results = handler.fetch_digitalocean_gpus()
+        names = [r["name"] for r in results]
+        self.assertEqual(names, sorted(names))
+
+
+class TestOvhGpus(unittest.TestCase):
+    """Test OVHcloud static catalog."""
+
+    def test_returns_expected_count(self):
+        results = handler.fetch_ovh_gpus()
+        self.assertEqual(len(results), 6)
+
+    def test_all_have_required_fields(self):
+        for gpu in handler.fetch_ovh_gpus():
+            self.assertIn("name", gpu)
+            self.assertIn("vram_gb", gpu)
+            self.assertIn("pricing", gpu)
+            self.assertGreater(gpu["vram_gb"], 0)
+
+    def test_demand_only_no_spot(self):
+        for gpu in handler.fetch_ovh_gpus():
+            p = gpu["pricing"]
+            self.assertIn("demand_min", p)
+            self.assertNotIn("spot_min", p)
+
+    def test_sorted_by_name(self):
+        results = handler.fetch_ovh_gpus()
+        names = [r["name"] for r in results]
+        self.assertEqual(names, sorted(names))
+
+
+class TestHetznerGpus(unittest.TestCase):
+    """Test Hetzner static catalog."""
+
+    def test_returns_expected_count(self):
+        results = handler.fetch_hetzner_gpus()
+        self.assertEqual(len(results), 2)
+
+    def test_all_have_required_fields(self):
+        for gpu in handler.fetch_hetzner_gpus():
+            self.assertIn("name", gpu)
+            self.assertIn("vram_gb", gpu)
+            self.assertIn("pricing", gpu)
+            self.assertGreater(gpu["vram_gb"], 0)
+
+    def test_demand_only_no_spot(self):
+        for gpu in handler.fetch_hetzner_gpus():
+            p = gpu["pricing"]
+            self.assertIn("demand_min", p)
+            self.assertNotIn("spot_min", p)
+
+    def test_sorted_by_name(self):
+        results = handler.fetch_hetzner_gpus()
+        names = [r["name"] for r in results]
+        self.assertEqual(names, sorted(names))
+
+
+class TestScalewayGpus(unittest.TestCase):
+    """Test Scaleway static catalog."""
+
+    def test_returns_expected_count(self):
+        results = handler.fetch_scaleway_gpus()
+        self.assertEqual(len(results), 5)
+
+    def test_all_have_required_fields(self):
+        for gpu in handler.fetch_scaleway_gpus():
+            self.assertIn("name", gpu)
+            self.assertIn("vram_gb", gpu)
+            self.assertIn("pricing", gpu)
+            self.assertGreater(gpu["vram_gb"], 0)
+
+    def test_demand_only_no_spot(self):
+        for gpu in handler.fetch_scaleway_gpus():
+            p = gpu["pricing"]
+            self.assertIn("demand_min", p)
+            self.assertNotIn("spot_min", p)
+
+    def test_sorted_by_name(self):
+        results = handler.fetch_scaleway_gpus()
+        names = [r["name"] for r in results]
+        self.assertEqual(names, sorted(names))
+
+
+class TestAlibabaGpus(unittest.TestCase):
+    """Test Alibaba Cloud static catalog."""
+
+    def test_returns_expected_count(self):
+        results = handler.fetch_alibaba_gpus()
+        self.assertEqual(len(results), 4)
+
+    def test_all_have_required_fields(self):
+        for gpu in handler.fetch_alibaba_gpus():
+            self.assertIn("name", gpu)
+            self.assertIn("vram_gb", gpu)
+            self.assertIn("pricing", gpu)
+            self.assertGreater(gpu["vram_gb"], 0)
+
+    def test_demand_only_no_spot(self):
+        for gpu in handler.fetch_alibaba_gpus():
+            p = gpu["pricing"]
+            self.assertIn("demand_min", p)
+            self.assertNotIn("spot_min", p)
+
+    def test_sorted_by_name(self):
+        results = handler.fetch_alibaba_gpus()
+        names = [r["name"] for r in results]
+        self.assertEqual(names, sorted(names))
+
+
+# ---------------------------------------------------------------------------
 # Unit test — DataCrunch with mocked API response
 # ---------------------------------------------------------------------------
 
@@ -338,6 +625,16 @@ class TestProviderConsistency(unittest.TestCase):
         ("CoreWeave", handler.fetch_coreweave_gpus),
         ("FluidStack", handler.fetch_fluidstack_gpus),
         ("Jarvis Labs", handler.fetch_jarvislabs_gpus),
+        ("Paperspace", handler.fetch_paperspace_gpus),
+        ("SaladCloud", handler.fetch_salad_gpus),
+        ("Crusoe", handler.fetch_crusoe_gpus),
+        ("Hyperstack", handler.fetch_hyperstack_gpus),
+        ("Nebius", handler.fetch_nebius_gpus),
+        ("DigitalOcean", handler.fetch_digitalocean_gpus),
+        ("OVHcloud", handler.fetch_ovh_gpus),
+        ("Hetzner", handler.fetch_hetzner_gpus),
+        ("Scaleway", handler.fetch_scaleway_gpus),
+        ("Alibaba Cloud", handler.fetch_alibaba_gpus),
     ]
 
     def _datacrunch_mocked(self):
@@ -390,6 +687,274 @@ class TestProviderConsistency(unittest.TestCase):
                 results = fn()
                 names = [r["name"] for r in results]
                 self.assertEqual(names, sorted(names))
+
+
+# ---------------------------------------------------------------------------
+# GPU name normalisation tests
+# ---------------------------------------------------------------------------
+
+
+class TestGpuNameNormalization(unittest.TestCase):
+    """Test that GPU names are normalised to canonical forms."""
+
+    def test_strips_nvidia_prefix(self):
+        self.assertEqual(handler.normalize_gpu_name("NVIDIA H100 SXM"), "H100 SXM")
+        self.assertEqual(handler.normalize_gpu_name("NVIDIA L40S"), "L40S")
+
+    def test_strips_amd_prefix(self):
+        self.assertEqual(handler.normalize_gpu_name("AMD MI300X"), "MI300X")
+
+    def test_h100_variants_normalise(self):
+        """All H100 SXM variants should map to 'H100 SXM'."""
+        variants = [
+            "NVIDIA H100 SXM",
+            "NVIDIA H100 80GB",
+            "NVIDIA HGX H100",
+            "NVIDIA H100 HGX",
+            "H100 SXM5 80GB",
+            "H100",
+            "H100 SXM",
+        ]
+        for v in variants:
+            with self.subTest(variant=v):
+                self.assertEqual(handler.normalize_gpu_name(v), "H100 SXM")
+
+    def test_h200_variants_normalise(self):
+        """All H200 SXM variants should map to 'H200 SXM'."""
+        variants = [
+            "NVIDIA H200 SXM",
+            "NVIDIA H200 141GB",
+            "NVIDIA HGX H200",
+            "NVIDIA H200 HGX",
+            "H200 SXM5 141GB",
+            "H200",
+        ]
+        for v in variants:
+            with self.subTest(variant=v):
+                self.assertEqual(handler.normalize_gpu_name(v), "H200 SXM")
+
+    def test_h100_pcie_stays_separate(self):
+        self.assertEqual(handler.normalize_gpu_name("H100 PCIe"), "H100 PCIe")
+        self.assertEqual(handler.normalize_gpu_name("NVIDIA H100 PCIe"), "H100 PCIe")
+
+    def test_a100_variants(self):
+        self.assertEqual(handler.normalize_gpu_name("NVIDIA A100 80GB"), "A100")
+        self.assertEqual(handler.normalize_gpu_name("A100 SXM4 80GB"), "A100 SXM")
+        self.assertEqual(handler.normalize_gpu_name("A100 PCIE"), "A100 PCIe")
+        self.assertEqual(handler.normalize_gpu_name("NVIDIA A100 PCIe"), "A100 PCIe")
+        self.assertEqual(handler.normalize_gpu_name("NVIDIA A100 NVLink"), "A100 SXM")
+
+    def test_rtx_pro_6000_variants(self):
+        """All RTX PRO 6000 form factors should normalise."""
+        variants = [
+            "RTX PRO 6000 Blackwell",
+            "RTX PRO 6000 WK",
+            "RTX PRO 6000 S",
+            "RTX PRO 6000 MaxQ",
+            "RTX Pro 6000",
+        ]
+        for v in variants:
+            with self.subTest(variant=v):
+                self.assertEqual(handler.normalize_gpu_name(v), "RTX PRO 6000")
+
+    def test_v100_variants(self):
+        self.assertEqual(handler.normalize_gpu_name("Tesla V100"), "V100")
+        self.assertEqual(handler.normalize_gpu_name("NVIDIA V100"), "V100")
+        self.assertEqual(handler.normalize_gpu_name("V100 SXM2"), "V100 SXM")
+
+    def test_b200_variants(self):
+        self.assertEqual(handler.normalize_gpu_name("NVIDIA HGX B200"), "B200 SXM")
+        self.assertEqual(handler.normalize_gpu_name("B200 SXM6 180GB"), "B200 SXM")
+        self.assertEqual(handler.normalize_gpu_name("NVIDIA B200 SXM"), "B200 SXM")
+
+    def test_a6000_variants(self):
+        self.assertEqual(handler.normalize_gpu_name("RTX A6000"), "A6000")
+        self.assertEqual(handler.normalize_gpu_name("NVIDIA A6000"), "A6000")
+        self.assertEqual(handler.normalize_gpu_name("A6000"), "A6000")
+
+    def test_preserves_distinct_models(self):
+        """Models that are genuinely different should stay different."""
+        self.assertNotEqual(
+            handler.normalize_gpu_name("H100 SXM"),
+            handler.normalize_gpu_name("H100 PCIe"),
+        )
+        self.assertNotEqual(
+            handler.normalize_gpu_name("H100 SXM"),
+            handler.normalize_gpu_name("H100 NVL"),
+        )
+
+
+# ---------------------------------------------------------------------------
+# Provider inventory tests — verify exact provider count and registration
+# ---------------------------------------------------------------------------
+# ⚠️  UPDATE THESE WHEN ADDING NEW GPU PROVIDERS  ⚠️
+# When you add a new GPU provider, you MUST:
+#   1. Add its slug to EXPECTED_PROVIDERS below
+#   2. Update EXPECTED_PROVIDER_COUNT
+#   3. Run `make test` to verify
+# ---------------------------------------------------------------------------
+
+# Canonical list of all implemented GPU providers (by slug).
+# This is the single source of truth for how many providers the system has.
+EXPECTED_PROVIDERS = {
+    "runpod",
+    "vast",
+    "lambda_labs",
+    "tensordock",
+    "vultr",
+    "azure",
+    "oracle",
+    "aws",
+    "thunder_compute",
+    "nova_cloud",
+    "google_cloud",
+    "coreweave",
+    "fluidstack",
+    "datacrunch",
+    "jarvis_labs",
+    "paperspace",
+    "salad",
+    "crusoe",
+    "hyperstack",
+    "nebius",
+    "digitalocean",
+    "ovh",
+    "hetzner",
+    "scaleway",
+    "alibaba",
+}
+EXPECTED_PROVIDER_COUNT = 25
+
+
+class TestProviderInventory(unittest.TestCase):
+    """Verify the handler has exactly the expected providers wired up.
+
+    These tests catch missing registrations — e.g. adding a fetch function
+    but forgetting to wire it into the snapshot or rollup.
+    """
+
+    def test_expected_count_matches_set(self):
+        """Guard against updating one but not the other."""
+        self.assertEqual(
+            len(EXPECTED_PROVIDERS), EXPECTED_PROVIDER_COUNT,
+            "EXPECTED_PROVIDERS set and EXPECTED_PROVIDER_COUNT are out of sync"
+        )
+
+    def test_all_fetch_functions_exist(self):
+        """Every expected provider must have a fetch_*_gpus function."""
+        # Map slugs to function names
+        slug_to_fn = {
+            "runpod": "fetch_runpod_gpus",
+            "vast": "fetch_vastai_gpus",
+            "lambda_labs": "fetch_lambdalabs_gpus",
+            "jarvis_labs": "fetch_jarvislabs_gpus",
+            "nova_cloud": "fetch_nova_cloud_gpus",
+            "thunder_compute": "fetch_thunder_compute_gpus",
+        }
+        for slug in EXPECTED_PROVIDERS:
+            fn_name = slug_to_fn.get(slug, f"fetch_{slug}_gpus")
+            with self.subTest(provider=slug):
+                self.assertTrue(
+                    hasattr(handler, fn_name),
+                    f"Missing fetch function: handler.{fn_name}"
+                )
+
+    def test_all_providers_in_rollup_list(self):
+        """Every expected provider must be in _all_providers tuple in update_gpu_rollups."""
+        import inspect
+        source = inspect.getsource(handler.update_gpu_rollups)
+        for slug in EXPECTED_PROVIDERS:
+            with self.subTest(provider=slug):
+                self.assertIn(
+                    f'"{slug}"', source,
+                    f"Provider '{slug}' not found in update_gpu_rollups — "
+                    f"add it to _all_providers and _write_provider_rollup calls"
+                )
+
+    def test_seed_data_matches(self):
+        """Seed data 'implemented' count must match EXPECTED_PROVIDER_COUNT."""
+        seed_path = Path(__file__).parent.parent / "data" / "seeds" / "gpu_providers.json"
+        if not seed_path.exists():
+            self.skipTest("Seed data not found")
+        data = json.loads(seed_path.read_text())
+        implemented = [p for p in data["providers"] if p.get("status") == "implemented"]
+        self.assertEqual(
+            len(implemented), EXPECTED_PROVIDER_COUNT,
+            f"Seed data has {len(implemented)} implemented providers, "
+            f"expected {EXPECTED_PROVIDER_COUNT}. Update seeds or EXPECTED_PROVIDER_COUNT."
+        )
+        # Verify slugs match
+        seed_slugs = {p["slug"] for p in implemented}
+        missing_in_seeds = EXPECTED_PROVIDERS - seed_slugs
+        missing_in_tests = seed_slugs - EXPECTED_PROVIDERS
+        self.assertFalse(
+            missing_in_seeds,
+            f"Providers in test but not in seeds: {missing_in_seeds}"
+        )
+        self.assertFalse(
+            missing_in_tests,
+            f"Providers in seeds but not in test: {missing_in_tests}"
+        )
+
+
+class TestProviderInventoryLive(unittest.TestCase):
+    """Verify the live deployment has all expected providers.
+
+    Run with: pytest tests/ -v -k Live
+    Requires network access to the CloudFront endpoint.
+    """
+
+    LIVE_URL = "https://d2urbiy71pvy0i.cloudfront.net/rollups/gpu/latest.json"
+
+    def _fetch_live_data(self):
+        import urllib.request
+        try:
+            req = urllib.request.Request(
+                self.LIVE_URL,
+                headers={"User-Agent": "dame-test/1.0"},
+            )
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                return json.loads(resp.read().decode())
+        except Exception as e:
+            self.skipTest(f"Live endpoint unreachable: {e}")
+
+    def test_live_has_all_providers(self):
+        """Production latest.json must contain all expected providers."""
+        data = self._fetch_live_data()
+        live_providers = {
+            k for k, v in data.items()
+            if isinstance(v, dict) and "gpus" in v
+        }
+        missing = EXPECTED_PROVIDERS - live_providers
+        self.assertFalse(
+            missing,
+            f"Live deployment missing providers: {missing}"
+        )
+
+    def test_live_provider_count(self):
+        """Production must have at least EXPECTED_PROVIDER_COUNT providers."""
+        data = self._fetch_live_data()
+        live_count = sum(
+            1 for v in data.values()
+            if isinstance(v, dict) and v.get("total_gpus", 0) > 0
+        )
+        self.assertGreaterEqual(
+            live_count, EXPECTED_PROVIDER_COUNT,
+            f"Live has {live_count} providers with data, expected >= {EXPECTED_PROVIDER_COUNT}"
+        )
+
+    def test_live_no_empty_providers(self):
+        """Every expected provider should have at least 1 GPU in production."""
+        data = self._fetch_live_data()
+        empty = []
+        for slug in EXPECTED_PROVIDERS:
+            prov = data.get(slug, {})
+            if not prov.get("gpus"):
+                empty.append(slug)
+        self.assertFalse(
+            empty,
+            f"Providers with 0 GPUs in production: {empty}"
+        )
 
 
 if __name__ == "__main__":

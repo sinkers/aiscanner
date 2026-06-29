@@ -494,11 +494,12 @@
             name = name.replace(formMatch[0], '').trim();
         }
 
-        // MIG slice pattern: "MIG 24GB", "MIG 48GB"
+        // MIG slice pattern: "MIG 24GB", "MIG 48GB" — keep as separate class
         const migMatch = name.match(/\bMIG\s*(\d+\s*GB)?/i);
         if (migMatch) {
-            variantParts.push(migMatch[0].trim());
-            name = name.replace(migMatch[0], '').trim();
+            // MIG partitions are distinct products; keep MIG in the class name
+            // so "B300 MIG 34GB" doesn't get grouped with "B300 SXM"
+            return { gpuClass: name || rawName, variant: null };
         }
 
         // Interface: SXM, SXM4, SXM5, PCIe, NVLink, HBM2e, HBM3
