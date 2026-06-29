@@ -23,7 +23,10 @@ GPU API keys (optional — set via SSM /dame/gpu/* or env var fallback):
 No-auth providers (always collected):
   TensorDock, Vultr, Azure, Oracle, AWS, Nova Cloud, DataCrunch/Verda,
   Google Cloud (static), CoreWeave (static), FluidStack (static),
-  Jarvis Labs (static)
+  Jarvis Labs (static), Paperspace (static), SaladCloud (static),
+  Crusoe (static), Hyperstack (static), Nebius (static),
+  DigitalOcean (static), OVHcloud (static), Hetzner (static),
+  Scaleway (static), Alibaba Cloud (static)
 
 ==============================================================================
 HISTORICAL DATA PROTECTION — DO NOT REMOVE OR MODIFY THESE INVARIANTS
@@ -1622,6 +1625,413 @@ def fetch_jarvislabs_gpus():
     return results
 
 
+# ---------------------------------------------------------------------------
+# GPU pricing collection — Paperspace (static catalog, API requires auth)
+# ---------------------------------------------------------------------------
+
+# Paperspace GPU pricing (per-GPU per-hour, on-demand)
+# Source: https://www.paperspace.com/pricing
+# Note: Paperspace is now part of DigitalOcean
+_PAPERSPACE_GPUS = [
+    {"name": "NVIDIA H100",     "vram_gb": 80,  "demand": 5.95},
+    {"name": "NVIDIA A100 80G", "vram_gb": 80,  "demand": 3.18},
+    {"name": "NVIDIA A6000",    "vram_gb": 48,  "demand": 1.89},
+    {"name": "NVIDIA A5000",    "vram_gb": 24,  "demand": 1.38},
+    {"name": "NVIDIA A4000",    "vram_gb": 16,  "demand": 0.76},
+    {"name": "NVIDIA V100",     "vram_gb": 16,  "demand": 2.30},
+    {"name": "NVIDIA P6000",    "vram_gb": 24,  "demand": 1.10},
+    {"name": "NVIDIA RTX5000",  "vram_gb": 16,  "demand": 0.82},
+    {"name": "NVIDIA P5000",    "vram_gb": 16,  "demand": 0.78},
+    {"name": "NVIDIA RTX4000",  "vram_gb": 8,   "demand": 0.56},
+    {"name": "NVIDIA P4000",    "vram_gb": 8,   "demand": 0.51},
+    {"name": "NVIDIA M4000",    "vram_gb": 8,   "demand": 0.45},
+]
+
+
+def fetch_paperspace_gpus():
+    """Return Paperspace GPU pricing from static catalog.
+
+    Paperspace (now part of DigitalOcean) requires auth for their API.
+    Prices maintained from their published pricing page. On-demand only.
+    """
+    results = []
+    for gpu in _PAPERSPACE_GPUS:
+        results.append({
+            "name": gpu["name"],
+            "vram_gb": gpu["vram_gb"],
+            "pricing": {
+                "min":        gpu["demand"],
+                "avg":        gpu["demand"],
+                "demand_min": gpu["demand"],
+                "demand_avg": gpu["demand"],
+            },
+        })
+    results.sort(key=lambda x: x["name"])
+    print(f"  Paperspace: {len(results)} GPU types (static catalog)")
+    return results
+
+
+# ---------------------------------------------------------------------------
+# GPU pricing collection — Salad (static catalog, API requires auth)
+# ---------------------------------------------------------------------------
+
+# SaladCloud GPU pricing (per-GPU per-hour, on-demand)
+# Source: https://salad.com/pricing
+# Note: Distributed GPU cloud using consumer GPUs; very low prices
+_SALAD_GPUS = [
+    {"name": "NVIDIA RTX 3070",    "vram_gb": 8,  "demand": 0.040},
+    {"name": "NVIDIA RTX 3080",    "vram_gb": 10, "demand": 0.060},
+    {"name": "NVIDIA RTX 3090",    "vram_gb": 24, "demand": 0.090},
+    {"name": "NVIDIA RTX 4070",    "vram_gb": 12, "demand": 0.050},
+    {"name": "NVIDIA RTX 4080",    "vram_gb": 16, "demand": 0.120},
+    {"name": "NVIDIA RTX 4090",    "vram_gb": 24, "demand": 0.160},
+    {"name": "NVIDIA RTX 5060",    "vram_gb": 12, "demand": 0.065},
+    {"name": "NVIDIA RTX 5070 Ti", "vram_gb": 16, "demand": 0.100},
+    {"name": "NVIDIA RTX 5080",    "vram_gb": 16, "demand": 0.180},
+    {"name": "NVIDIA RTX 5090",    "vram_gb": 32, "demand": 0.250},
+    {"name": "NVIDIA RTX A5000",   "vram_gb": 24, "demand": 0.090},
+]
+
+
+def fetch_salad_gpus():
+    """Return SaladCloud GPU pricing from static catalog.
+
+    SaladCloud is a distributed GPU cloud using consumer hardware.
+    API requires auth. Prices from their published pricing page.
+    On-demand only; no spot tier (already lowest-cost via distributed model).
+    """
+    results = []
+    for gpu in _SALAD_GPUS:
+        results.append({
+            "name": gpu["name"],
+            "vram_gb": gpu["vram_gb"],
+            "pricing": {
+                "min":        gpu["demand"],
+                "avg":        gpu["demand"],
+                "demand_min": gpu["demand"],
+                "demand_avg": gpu["demand"],
+            },
+        })
+    results.sort(key=lambda x: x["name"])
+    print(f"  Salad: {len(results)} GPU types (static catalog)")
+    return results
+
+
+# ---------------------------------------------------------------------------
+# GPU pricing collection — Crusoe (static catalog, API requires auth)
+# ---------------------------------------------------------------------------
+
+# Crusoe Cloud GPU pricing (per-GPU per-hour)
+# Source: https://crusoe.ai/cloud/pricing
+_CRUSOE_GPUS = [
+    {"name": "NVIDIA L40S",        "vram_gb": 48,  "demand": 1.50, "spot": None},
+    {"name": "NVIDIA A100 PCIe",   "vram_gb": 80,  "demand": 2.00, "spot": None},
+    {"name": "NVIDIA A100 SXM",    "vram_gb": 80,  "demand": 2.30, "spot": None},
+    {"name": "AMD MI300X",         "vram_gb": 192, "demand": 3.45, "spot": None},
+    {"name": "NVIDIA H100 HGX",    "vram_gb": 80,  "demand": 3.90, "spot": None},
+    {"name": "NVIDIA H200 HGX",    "vram_gb": 141, "demand": 4.29, "spot": None},
+]
+
+
+def fetch_crusoe_gpus():
+    """Return Crusoe Cloud GPU pricing from static catalog.
+
+    Crusoe (clean energy GPU cloud) requires auth for their API.
+    Prices maintained from their published pricing page. On-demand only;
+    spot pricing available but discounts vary (30-70%), not listed statically.
+    """
+    results = []
+    for gpu in _CRUSOE_GPUS:
+        results.append({
+            "name": gpu["name"],
+            "vram_gb": gpu["vram_gb"],
+            "pricing": {
+                "min":        gpu["demand"],
+                "avg":        gpu["demand"],
+                "demand_min": gpu["demand"],
+                "demand_avg": gpu["demand"],
+            },
+        })
+    results.sort(key=lambda x: x["name"])
+    print(f"  Crusoe: {len(results)} GPU types (static catalog)")
+    return results
+
+
+# ---------------------------------------------------------------------------
+# GPU pricing collection — Hyperstack (static catalog, API requires auth)
+# ---------------------------------------------------------------------------
+
+# Hyperstack GPU pricing (per-GPU per-hour, on-demand)
+# Source: https://www.hyperstack.cloud/gpu-pricing
+_HYPERSTACK_GPUS = [
+    {"name": "NVIDIA A4000",           "vram_gb": 16,  "demand": 0.15},
+    {"name": "NVIDIA A6000",           "vram_gb": 48,  "demand": 0.50},
+    {"name": "NVIDIA L40",             "vram_gb": 48,  "demand": 1.00},
+    {"name": "NVIDIA A100 80GB",       "vram_gb": 80,  "demand": 1.35},
+    {"name": "NVIDIA A100 NVLink",     "vram_gb": 80,  "demand": 1.40},
+    {"name": "NVIDIA A100 SXM",        "vram_gb": 80,  "demand": 1.60},
+    {"name": "RTX PRO 6000 Blackwell", "vram_gb": 96,  "demand": 1.80},
+    {"name": "NVIDIA H100",            "vram_gb": 80,  "demand": 1.90},
+    {"name": "NVIDIA H100 NVLink",     "vram_gb": 80,  "demand": 1.95},
+    {"name": "NVIDIA H100 SXM",        "vram_gb": 80,  "demand": 2.40},
+    {"name": "NVIDIA H200 SXM",        "vram_gb": 141, "demand": 3.50},
+]
+
+
+def fetch_hyperstack_gpus():
+    """Return Hyperstack GPU pricing from static catalog.
+
+    Hyperstack requires auth for their API. Prices maintained from their
+    published GPU pricing page. On-demand only.
+    """
+    results = []
+    for gpu in _HYPERSTACK_GPUS:
+        results.append({
+            "name": gpu["name"],
+            "vram_gb": gpu["vram_gb"],
+            "pricing": {
+                "min":        gpu["demand"],
+                "avg":        gpu["demand"],
+                "demand_min": gpu["demand"],
+                "demand_avg": gpu["demand"],
+            },
+        })
+    results.sort(key=lambda x: x["name"])
+    print(f"  Hyperstack: {len(results)} GPU types (static catalog)")
+    return results
+
+
+# ---------------------------------------------------------------------------
+# GPU pricing collection — Nebius (static catalog, API requires auth)
+# ---------------------------------------------------------------------------
+
+# Nebius AI GPU pricing (per-GPU per-hour, on-demand)
+# Source: https://nebius.com/prices
+_NEBIUS_GPUS = [
+    {"name": "NVIDIA L40S",            "vram_gb": 48,  "demand": 1.55},
+    {"name": "RTX PRO 6000 Blackwell", "vram_gb": 96,  "demand": 1.80},
+    {"name": "NVIDIA H100 SXM",        "vram_gb": 80,  "demand": 2.55},
+    {"name": "NVIDIA H200 SXM",        "vram_gb": 141, "demand": 4.50},
+    {"name": "NVIDIA B200 SXM",        "vram_gb": 192, "demand": 5.50},
+    {"name": "NVIDIA B300 SXM",        "vram_gb": 288, "demand": 7.85},
+]
+
+
+def fetch_nebius_gpus():
+    """Return Nebius AI GPU pricing from static catalog.
+
+    Nebius requires auth for their API. Prices maintained from their
+    published pricing page. On-demand only; spot available at 50-80%
+    discount but varies dynamically.
+    """
+    results = []
+    for gpu in _NEBIUS_GPUS:
+        results.append({
+            "name": gpu["name"],
+            "vram_gb": gpu["vram_gb"],
+            "pricing": {
+                "min":        gpu["demand"],
+                "avg":        gpu["demand"],
+                "demand_min": gpu["demand"],
+                "demand_avg": gpu["demand"],
+            },
+        })
+    results.sort(key=lambda x: x["name"])
+    print(f"  Nebius: {len(results)} GPU types (static catalog)")
+    return results
+
+
+# ---------------------------------------------------------------------------
+# GPU pricing collection — DigitalOcean (static catalog, API requires auth)
+# ---------------------------------------------------------------------------
+
+# DigitalOcean GPU Droplets pricing (per-GPU per-hour, on-demand)
+# Source: https://www.digitalocean.com/pricing/gpu-droplets
+_DIGITALOCEAN_GPUS = [
+    {"name": "NVIDIA L40S",   "vram_gb": 48,  "demand": 0.76},
+    {"name": "AMD MI300X",    "vram_gb": 192, "demand": 3.41},
+    {"name": "NVIDIA H100",   "vram_gb": 80,  "demand": 4.24},
+    {"name": "NVIDIA H200",   "vram_gb": 141, "demand": 7.99},
+]
+
+
+def fetch_digitalocean_gpus():
+    """Return DigitalOcean GPU Droplets pricing from static catalog.
+
+    DigitalOcean requires auth for their API. Prices maintained from
+    their published GPU Droplets pricing page. On-demand only.
+    """
+    results = []
+    for gpu in _DIGITALOCEAN_GPUS:
+        results.append({
+            "name": gpu["name"],
+            "vram_gb": gpu["vram_gb"],
+            "pricing": {
+                "min":        gpu["demand"],
+                "avg":        gpu["demand"],
+                "demand_min": gpu["demand"],
+                "demand_avg": gpu["demand"],
+            },
+        })
+    results.sort(key=lambda x: x["name"])
+    print(f"  DigitalOcean: {len(results)} GPU types (static catalog)")
+    return results
+
+
+# ---------------------------------------------------------------------------
+# GPU pricing collection — OVHcloud (static catalog, no auth needed)
+# ---------------------------------------------------------------------------
+
+# OVHcloud GPU pricing (per-GPU per-hour, on-demand)
+# Source: https://www.ovhcloud.com/en/public-cloud/prices/
+# Note: Prices converted from EUR to USD at ~1.10 rate
+_OVH_GPUS = [
+    {"name": "NVIDIA L4",          "vram_gb": 24,  "demand": 0.50},
+    {"name": "NVIDIA L40S",        "vram_gb": 48,  "demand": 0.75},
+    {"name": "NVIDIA A100 PCIe",   "vram_gb": 80,  "demand": 1.43},
+    {"name": "NVIDIA H100 PCIe",   "vram_gb": 80,  "demand": 1.67},
+    {"name": "NVIDIA H100 SXM",    "vram_gb": 80,  "demand": 2.04},
+    {"name": "NVIDIA H200 SXM",    "vram_gb": 141, "demand": 3.30},
+]
+
+
+def fetch_ovh_gpus():
+    """Return OVHcloud GPU pricing from static catalog.
+
+    OVHcloud pricing page is public but requires instance configuration
+    to see exact rates. Prices here are approximate EUR->USD conversions
+    from their published European datacenter rates. On-demand only.
+    """
+    results = []
+    for gpu in _OVH_GPUS:
+        results.append({
+            "name": gpu["name"],
+            "vram_gb": gpu["vram_gb"],
+            "pricing": {
+                "min":        gpu["demand"],
+                "avg":        gpu["demand"],
+                "demand_min": gpu["demand"],
+                "demand_avg": gpu["demand"],
+            },
+        })
+    results.sort(key=lambda x: x["name"])
+    print(f"  OVHcloud: {len(results)} GPU types (static catalog)")
+    return results
+
+
+# ---------------------------------------------------------------------------
+# GPU pricing collection — Hetzner (static catalog, no auth needed)
+# ---------------------------------------------------------------------------
+
+# Hetzner GPU server pricing (per-GPU per-hour, on-demand)
+# Source: https://www.hetzner.com/dedicated-rootserver/
+# Note: Prices converted from EUR monthly to USD hourly (~730 hrs/month, EUR*1.10)
+_HETZNER_GPUS = [
+    {"name": "NVIDIA RTX 4000 SFF Ada",    "vram_gb": 20,  "demand": 0.28},
+    {"name": "RTX PRO 6000 Blackwell",     "vram_gb": 96,  "demand": 1.34},
+]
+
+
+def fetch_hetzner_gpus():
+    """Return Hetzner GPU pricing from static catalog.
+
+    Hetzner offers dedicated GPU servers with monthly billing (capped hourly).
+    Prices converted from EUR/month to USD/hour. Limited GPU selection.
+    """
+    results = []
+    for gpu in _HETZNER_GPUS:
+        results.append({
+            "name": gpu["name"],
+            "vram_gb": gpu["vram_gb"],
+            "pricing": {
+                "min":        gpu["demand"],
+                "avg":        gpu["demand"],
+                "demand_min": gpu["demand"],
+                "demand_avg": gpu["demand"],
+            },
+        })
+    results.sort(key=lambda x: x["name"])
+    print(f"  Hetzner: {len(results)} GPU types (static catalog)")
+    return results
+
+
+# ---------------------------------------------------------------------------
+# GPU pricing collection — Scaleway (static catalog, API requires auth)
+# ---------------------------------------------------------------------------
+
+# Scaleway GPU pricing (per-GPU per-hour, on-demand)
+# Source: https://www.scaleway.com/en/gpu-instances/
+_SCALEWAY_GPUS = [
+    {"name": "NVIDIA L4",          "vram_gb": 24,  "demand": 0.90},
+    {"name": "NVIDIA L40S",        "vram_gb": 48,  "demand": 1.68},
+    {"name": "NVIDIA H100 PCIe",   "vram_gb": 80,  "demand": 3.27},
+    {"name": "NVIDIA H100 SXM",    "vram_gb": 80,  "demand": 3.61},
+    {"name": "NVIDIA B300 SXM",    "vram_gb": 262, "demand": 8.55},
+]
+
+
+def fetch_scaleway_gpus():
+    """Return Scaleway GPU pricing from static catalog.
+
+    Scaleway requires auth for their API. Prices maintained from their
+    published GPU instances page. On-demand only; available in Paris
+    and Warsaw regions.
+    """
+    results = []
+    for gpu in _SCALEWAY_GPUS:
+        results.append({
+            "name": gpu["name"],
+            "vram_gb": gpu["vram_gb"],
+            "pricing": {
+                "min":        gpu["demand"],
+                "avg":        gpu["demand"],
+                "demand_min": gpu["demand"],
+                "demand_avg": gpu["demand"],
+            },
+        })
+    results.sort(key=lambda x: x["name"])
+    print(f"  Scaleway: {len(results)} GPU types (static catalog)")
+    return results
+
+
+# ---------------------------------------------------------------------------
+# GPU pricing collection — Alibaba Cloud (static catalog, API requires auth)
+# ---------------------------------------------------------------------------
+
+# Alibaba Cloud GPU pricing (per-GPU per-hour, on-demand)
+# Source: https://www.alibabacloud.com/product/gpu
+# Note: Prices are approximate US region rates
+_ALIBABA_GPUS = [
+    {"name": "NVIDIA T4",          "vram_gb": 16,  "demand": 0.45},
+    {"name": "NVIDIA V100",        "vram_gb": 16,  "demand": 2.55},
+    {"name": "NVIDIA A100 80GB",   "vram_gb": 80,  "demand": 3.67},
+    {"name": "NVIDIA L40S",        "vram_gb": 48,  "demand": 1.75},
+]
+
+
+def fetch_alibaba_gpus():
+    """Return Alibaba Cloud GPU pricing from static catalog.
+
+    Alibaba Cloud requires auth for their API. Prices approximate from
+    their published pricing (US region). On-demand only.
+    """
+    results = []
+    for gpu in _ALIBABA_GPUS:
+        results.append({
+            "name": gpu["name"],
+            "vram_gb": gpu["vram_gb"],
+            "pricing": {
+                "min":        gpu["demand"],
+                "avg":        gpu["demand"],
+                "demand_min": gpu["demand"],
+                "demand_avg": gpu["demand"],
+            },
+        })
+    results.sort(key=lambda x: x["name"])
+    print(f"  Alibaba Cloud: {len(results)} GPU types (static catalog)")
+    return results
+
+
 def update_gpu_rollups(gpu_snapshot, today):
     """Append today's prices to per-GPU history files for all providers."""
 
@@ -1774,10 +2184,92 @@ def update_gpu_rollups(gpu_snapshot, today):
         "demand_avg": "demand_avg",
     })
 
+    # Paperspace — on-demand only
+    _write_provider_rollup("paperspace", gpu_snapshot.get("paperspace", {}).get("gpus", []), today, {
+        "min":        "min",
+        "avg":        "avg",
+        "demand_min": "demand_min",
+        "demand_avg": "demand_avg",
+    })
+
+    # SaladCloud — on-demand only
+    _write_provider_rollup("salad", gpu_snapshot.get("salad", {}).get("gpus", []), today, {
+        "min":        "min",
+        "avg":        "avg",
+        "demand_min": "demand_min",
+        "demand_avg": "demand_avg",
+    })
+
+    # Crusoe — on-demand only
+    _write_provider_rollup("crusoe", gpu_snapshot.get("crusoe", {}).get("gpus", []), today, {
+        "min":        "min",
+        "avg":        "avg",
+        "demand_min": "demand_min",
+        "demand_avg": "demand_avg",
+    })
+
+    # Hyperstack — on-demand only
+    _write_provider_rollup("hyperstack", gpu_snapshot.get("hyperstack", {}).get("gpus", []), today, {
+        "min":        "min",
+        "avg":        "avg",
+        "demand_min": "demand_min",
+        "demand_avg": "demand_avg",
+    })
+
+    # Nebius — on-demand only
+    _write_provider_rollup("nebius", gpu_snapshot.get("nebius", {}).get("gpus", []), today, {
+        "min":        "min",
+        "avg":        "avg",
+        "demand_min": "demand_min",
+        "demand_avg": "demand_avg",
+    })
+
+    # DigitalOcean — on-demand only
+    _write_provider_rollup("digitalocean", gpu_snapshot.get("digitalocean", {}).get("gpus", []), today, {
+        "min":        "min",
+        "avg":        "avg",
+        "demand_min": "demand_min",
+        "demand_avg": "demand_avg",
+    })
+
+    # OVHcloud — on-demand only
+    _write_provider_rollup("ovh", gpu_snapshot.get("ovh", {}).get("gpus", []), today, {
+        "min":        "min",
+        "avg":        "avg",
+        "demand_min": "demand_min",
+        "demand_avg": "demand_avg",
+    })
+
+    # Hetzner — on-demand only
+    _write_provider_rollup("hetzner", gpu_snapshot.get("hetzner", {}).get("gpus", []), today, {
+        "min":        "min",
+        "avg":        "avg",
+        "demand_min": "demand_min",
+        "demand_avg": "demand_avg",
+    })
+
+    # Scaleway — on-demand only
+    _write_provider_rollup("scaleway", gpu_snapshot.get("scaleway", {}).get("gpus", []), today, {
+        "min":        "min",
+        "avg":        "avg",
+        "demand_min": "demand_min",
+        "demand_avg": "demand_avg",
+    })
+
+    # Alibaba Cloud — on-demand only
+    _write_provider_rollup("alibaba", gpu_snapshot.get("alibaba", {}).get("gpus", []), today, {
+        "min":        "min",
+        "avg":        "avg",
+        "demand_min": "demand_min",
+        "demand_avg": "demand_avg",
+    })
+
     _all_providers = (
         "runpod", "vast", "lambda_labs", "tensordock", "vultr", "azure",
         "oracle", "aws", "thunder_compute", "nova_cloud",
         "google_cloud", "coreweave", "fluidstack", "datacrunch", "jarvis_labs",
+        "paperspace", "salad", "crusoe", "hyperstack", "nebius",
+        "digitalocean", "ovh", "hetzner", "scaleway", "alibaba",
     )
     counts = {
         k: len(gpu_snapshot.get(k, {}).get("gpus", []))
@@ -2010,6 +2502,16 @@ def handler(event, context):
     fluidstack_gpus      = fetch_fluidstack_gpus()
     datacrunch_gpus      = fetch_datacrunch_gpus()
     jarvis_labs_gpus     = fetch_jarvislabs_gpus()
+    paperspace_gpus      = fetch_paperspace_gpus()
+    salad_gpus           = fetch_salad_gpus()
+    crusoe_gpus          = fetch_crusoe_gpus()
+    hyperstack_gpus      = fetch_hyperstack_gpus()
+    nebius_gpus          = fetch_nebius_gpus()
+    digitalocean_gpus    = fetch_digitalocean_gpus()
+    ovh_gpus             = fetch_ovh_gpus()
+    hetzner_gpus         = fetch_hetzner_gpus()
+    scaleway_gpus        = fetch_scaleway_gpus()
+    alibaba_gpus         = fetch_alibaba_gpus()
 
     # Build snapshot — always write if at least one provider has data
     _provider_results = {
@@ -2028,6 +2530,16 @@ def handler(event, context):
         "fluidstack":      fluidstack_gpus,
         "datacrunch":      datacrunch_gpus,
         "jarvis_labs":     jarvis_labs_gpus,
+        "paperspace":      paperspace_gpus,
+        "salad":           salad_gpus,
+        "crusoe":          crusoe_gpus,
+        "hyperstack":      hyperstack_gpus,
+        "nebius":          nebius_gpus,
+        "digitalocean":    digitalocean_gpus,
+        "ovh":             ovh_gpus,
+        "hetzner":         hetzner_gpus,
+        "scaleway":        scaleway_gpus,
+        "alibaba":         alibaba_gpus,
     }
     any_data = any(gpus for gpus in _provider_results.values())
 
@@ -2049,6 +2561,16 @@ def handler(event, context):
             "fluidstack":      {"name": "FluidStack",       "total_gpus": len(fluidstack_gpus),      "gpus": fluidstack_gpus},
             "datacrunch":      {"name": "DataCrunch",       "total_gpus": len(datacrunch_gpus),      "gpus": datacrunch_gpus},
             "jarvis_labs":     {"name": "Jarvis Labs",      "total_gpus": len(jarvis_labs_gpus),     "gpus": jarvis_labs_gpus},
+            "paperspace":      {"name": "Paperspace",       "total_gpus": len(paperspace_gpus),      "gpus": paperspace_gpus},
+            "salad":           {"name": "SaladCloud",       "total_gpus": len(salad_gpus),           "gpus": salad_gpus},
+            "crusoe":          {"name": "Crusoe",           "total_gpus": len(crusoe_gpus),          "gpus": crusoe_gpus},
+            "hyperstack":      {"name": "Hyperstack",       "total_gpus": len(hyperstack_gpus),      "gpus": hyperstack_gpus},
+            "nebius":          {"name": "Nebius",           "total_gpus": len(nebius_gpus),           "gpus": nebius_gpus},
+            "digitalocean":    {"name": "DigitalOcean",     "total_gpus": len(digitalocean_gpus),    "gpus": digitalocean_gpus},
+            "ovh":             {"name": "OVHcloud",         "total_gpus": len(ovh_gpus),             "gpus": ovh_gpus},
+            "hetzner":         {"name": "Hetzner",          "total_gpus": len(hetzner_gpus),         "gpus": hetzner_gpus},
+            "scaleway":        {"name": "Scaleway",         "total_gpus": len(scaleway_gpus),        "gpus": scaleway_gpus},
+            "alibaba":         {"name": "Alibaba Cloud",    "total_gpus": len(alibaba_gpus),         "gpus": alibaba_gpus},
         }
 
         # Carry forward last known data for any provider that returned nothing
