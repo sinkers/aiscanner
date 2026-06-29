@@ -2,7 +2,8 @@
         seed ui invoke rebuild-history \
         fetch-openrouter map-infra integrate-research generate-report refresh-all \
         fetch-voice serve view-map view-report \
-        configure-gpu configure-gpu-env
+        configure-gpu configure-gpu-env \
+        test test-live
 
 # ── Python package path ─────────────────────────────────────────────────────
 PYTHONPATH := src
@@ -108,6 +109,15 @@ fetch-voice:
 	bash scripts/refresh_voice_video.sh
 
 # ── Local Dev ─────────────────────────────────────────────────────────────────
+## test               Run all tests (unit + integration, no network needed)
+test:
+	python3 -m pytest tests/ -v --tb=short
+
+## test-live          Run tests including live deployment verification (needs network)
+test-live:
+	python3 -m pytest tests/ -v --tb=short -k "not Live" && \
+	python3 -m pytest tests/ -v --tb=short -k "Live"
+
 ## serve              Run local dev server at http://localhost:8000/webapp/
 serve:
 	python3 -m llm_providers.cli.serve
