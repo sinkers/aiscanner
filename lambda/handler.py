@@ -1518,14 +1518,17 @@ def fetch_datacrunch_gpus():
 
     gpu_groups = {}
     for instance in data:
-        gpu_info = instance.get("gpu", {})
+        if not isinstance(instance, dict):
+            continue
+        gpu_info = instance.get("gpu") or {}
         num_gpus = gpu_info.get("number_of_gpus", 1)
         if num_gpus != 1:
             continue  # skip multi-GPU for per-GPU pricing
 
-        model = instance.get("model", "")
-        name = instance.get("name", model)
-        vram = instance.get("gpu_memory", {}).get("size_in_gigabytes", 0)
+        model = instance.get("model") or ""
+        name = instance.get("name") or model
+        gpu_mem = instance.get("gpu_memory") or {}
+        vram = gpu_mem.get("size_in_gigabytes", 0)
 
         price_str = instance.get("price_per_hour", "0")
         spot_str = instance.get("spot_price", "0")
