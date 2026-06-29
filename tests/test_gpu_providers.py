@@ -689,5 +689,100 @@ class TestProviderConsistency(unittest.TestCase):
                 self.assertEqual(names, sorted(names))
 
 
+# ---------------------------------------------------------------------------
+# GPU name normalisation tests
+# ---------------------------------------------------------------------------
+
+
+class TestGpuNameNormalization(unittest.TestCase):
+    """Test that GPU names are normalised to canonical forms."""
+
+    def test_strips_nvidia_prefix(self):
+        self.assertEqual(handler.normalize_gpu_name("NVIDIA H100 SXM"), "H100 SXM")
+        self.assertEqual(handler.normalize_gpu_name("NVIDIA L40S"), "L40S")
+
+    def test_strips_amd_prefix(self):
+        self.assertEqual(handler.normalize_gpu_name("AMD MI300X"), "MI300X")
+
+    def test_h100_variants_normalise(self):
+        """All H100 SXM variants should map to 'H100 SXM'."""
+        variants = [
+            "NVIDIA H100 SXM",
+            "NVIDIA H100 80GB",
+            "NVIDIA HGX H100",
+            "NVIDIA H100 HGX",
+            "H100 SXM5 80GB",
+            "H100",
+            "H100 SXM",
+        ]
+        for v in variants:
+            with self.subTest(variant=v):
+                self.assertEqual(handler.normalize_gpu_name(v), "H100 SXM")
+
+    def test_h200_variants_normalise(self):
+        """All H200 SXM variants should map to 'H200 SXM'."""
+        variants = [
+            "NVIDIA H200 SXM",
+            "NVIDIA H200 141GB",
+            "NVIDIA HGX H200",
+            "NVIDIA H200 HGX",
+            "H200 SXM5 141GB",
+            "H200",
+        ]
+        for v in variants:
+            with self.subTest(variant=v):
+                self.assertEqual(handler.normalize_gpu_name(v), "H200 SXM")
+
+    def test_h100_pcie_stays_separate(self):
+        self.assertEqual(handler.normalize_gpu_name("H100 PCIe"), "H100 PCIe")
+        self.assertEqual(handler.normalize_gpu_name("NVIDIA H100 PCIe"), "H100 PCIe")
+
+    def test_a100_variants(self):
+        self.assertEqual(handler.normalize_gpu_name("NVIDIA A100 80GB"), "A100")
+        self.assertEqual(handler.normalize_gpu_name("A100 SXM4 80GB"), "A100 SXM")
+        self.assertEqual(handler.normalize_gpu_name("A100 PCIE"), "A100 PCIe")
+        self.assertEqual(handler.normalize_gpu_name("NVIDIA A100 PCIe"), "A100 PCIe")
+        self.assertEqual(handler.normalize_gpu_name("NVIDIA A100 NVLink"), "A100 SXM")
+
+    def test_rtx_pro_6000_variants(self):
+        """All RTX PRO 6000 form factors should normalise."""
+        variants = [
+            "RTX PRO 6000 Blackwell",
+            "RTX PRO 6000 WK",
+            "RTX PRO 6000 S",
+            "RTX PRO 6000 MaxQ",
+            "RTX Pro 6000",
+        ]
+        for v in variants:
+            with self.subTest(variant=v):
+                self.assertEqual(handler.normalize_gpu_name(v), "RTX PRO 6000")
+
+    def test_v100_variants(self):
+        self.assertEqual(handler.normalize_gpu_name("Tesla V100"), "V100")
+        self.assertEqual(handler.normalize_gpu_name("NVIDIA V100"), "V100")
+        self.assertEqual(handler.normalize_gpu_name("V100 SXM2"), "V100 SXM")
+
+    def test_b200_variants(self):
+        self.assertEqual(handler.normalize_gpu_name("NVIDIA HGX B200"), "B200 SXM")
+        self.assertEqual(handler.normalize_gpu_name("B200 SXM6 180GB"), "B200 SXM")
+        self.assertEqual(handler.normalize_gpu_name("NVIDIA B200 SXM"), "B200 SXM")
+
+    def test_a6000_variants(self):
+        self.assertEqual(handler.normalize_gpu_name("RTX A6000"), "A6000")
+        self.assertEqual(handler.normalize_gpu_name("NVIDIA A6000"), "A6000")
+        self.assertEqual(handler.normalize_gpu_name("A6000"), "A6000")
+
+    def test_preserves_distinct_models(self):
+        """Models that are genuinely different should stay different."""
+        self.assertNotEqual(
+            handler.normalize_gpu_name("H100 SXM"),
+            handler.normalize_gpu_name("H100 PCIe"),
+        )
+        self.assertNotEqual(
+            handler.normalize_gpu_name("H100 SXM"),
+            handler.normalize_gpu_name("H100 NVL"),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

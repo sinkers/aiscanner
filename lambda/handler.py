@@ -425,6 +425,108 @@ def fetch_benchmarks():
 
 
 # ---------------------------------------------------------------------------
+# GPU name normalisation
+# ---------------------------------------------------------------------------
+# Different providers name the same GPU differently. This function maps all
+# variants to a canonical name so cross-provider comparison works.
+
+# Regex patterns applied in order to strip noise before lookup
+_GPU_NAME_STRIP_PATTERNS = [
+    (re.compile(r"\s*\d+GB$", re.IGNORECASE), ""),           # trailing "80GB"
+    (re.compile(r"\s+SXM[45]?$", re.IGNORECASE), " SXM"),    # SXM4/SXM5 → SXM
+    (re.compile(r"\s+SXM[56]?$", re.IGNORECASE), " SXM"),    # SXM6 → SXM
+    (re.compile(r"\s+PCIE$", re.IGNORECASE), " PCIe"),        # PCIE → PCIe
+]
+
+# Explicit name mappings: raw name → canonical name
+_GPU_NAME_MAP = {
+    # H100 variants
+    "HGX H100":               "H100 SXM",
+    "H100 HGX":               "H100 SXM",
+    "H100 SXM5":              "H100 SXM",
+    "H100 (Tensor)":          "H100 SXM",
+    "H100":                   "H100 SXM",
+    "H100 NVL":               "H100 NVL",
+    # H200 variants
+    "HGX H200":               "H200 SXM",
+    "H200 HGX":               "H200 SXM",
+    "H200 SXM5":              "H200 SXM",
+    "H200":                   "H200 SXM",
+    "H200 NVL":               "H200 NVL",
+    # B200 variants
+    "HGX B200":               "B200 SXM",
+    "B200 SXM6":              "B200 SXM",
+    "B200":                   "B200 SXM",
+    # B300 variants
+    "HGX B300":               "B300 SXM",
+    "B300 SXM6":              "B300 SXM",
+    "B300":                   "B300 SXM",
+    # GB200/GB300
+    "GB200 NVL72":            "GB200 NVL72",
+    "GB300 SXM6":             "GB300 SXM",
+    # A100 variants
+    "A100 SXM4":              "A100 SXM",
+    "A100 SXM":               "A100 SXM",
+    "A100 NVLink":            "A100 SXM",
+    "A100 PCIE":              "A100 PCIe",
+    "A100 PCIe":              "A100 PCIe",
+    "A100 80G":               "A100 80GB",
+    "A100 (E3)":              "A100",
+    "A100 (E4)":              "A100",
+    # A6000 variants
+    "RTX A6000":              "A6000",
+    "A6000":                  "A6000",
+    # L40S
+    "L40S":                   "L40S",
+    # L40
+    "L40":                    "L40",
+    # V100 variants
+    "Tesla V100":             "V100",
+    "V100":                   "V100",
+    "V100 SXM2":              "V100 SXM",
+    "Tesla V100 (V2)":        "V100",
+    "Tesla V100 (X7)":        "V100",
+    # RTX PRO 6000 variants
+    "RTX PRO 6000 Blackwell": "RTX PRO 6000",
+    "RTX PRO 6000 WK":        "RTX PRO 6000",
+    "RTX PRO 6000 WS":        "RTX PRO 6000",
+    "RTX PRO 6000 S":         "RTX PRO 6000",
+    "RTX PRO 6000 MaxQ":      "RTX PRO 6000",
+    "RTX PRO 6000 SE":        "RTX PRO 6000",
+    "RTX PRO 6000 CC":        "RTX PRO 6000",
+    "RTX Pro 6000":           "RTX PRO 6000",
+    # GH200
+    "GH200":                  "GH200",
+    # MI300X
+    "MI300X":                 "MI300X",
+}
+
+
+def normalize_gpu_name(raw_name):
+    """Normalize a GPU name to a canonical form for cross-provider comparison.
+
+    Strips 'NVIDIA ' / 'AMD ' prefixes, removes trailing VRAM suffixes,
+    normalises SXM/PCIe variants, then applies the explicit mapping table.
+    """
+    name = raw_name.strip()
+
+    # Strip vendor prefixes
+    for prefix in ("NVIDIA ", "AMD "):
+        if name.startswith(prefix):
+            name = name[len(prefix):]
+
+    # Strip trailing VRAM (e.g. "80GB", "48GB") and SXM version numbers
+    for pattern, repl in _GPU_NAME_STRIP_PATTERNS:
+        name = pattern.sub(repl, name)
+
+    # Explicit mapping
+    if name in _GPU_NAME_MAP:
+        return _GPU_NAME_MAP[name]
+
+    return name
+
+
+# ---------------------------------------------------------------------------
 # GPU pricing collection (RunPod + Vast.ai)
 # ---------------------------------------------------------------------------
 
@@ -2541,6 +2643,12 @@ def handler(event, context):
         "scaleway":        scaleway_gpus,
         "alibaba":         alibaba_gpus,
     }
+
+    # Normalise GPU names across all providers for cross-provider comparison
+    for provider_key, gpus in _provider_results.items():
+        for gpu in gpus:
+            gpu["name"] = normalize_gpu_name(gpu["name"])
+
     any_data = any(gpus for gpus in _provider_results.values())
 
     if any_data:
