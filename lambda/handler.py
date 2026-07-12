@@ -1142,7 +1142,15 @@ def fetch_oracle_gpus():
 
 # GPU instance families in AWS: p, g, trn (Trainium), inf (Inferentia)
 # We focus on p and g families for actual GPU compute
-_AWS_GPU_FAMILIES = ("p2.", "p3.", "p4.", "p5.", "p6.", "g4.", "g5.", "g6.", "g6e.")
+_AWS_GPU_FAMILIES = (
+    "p2.", "p3.", "p3dn.",
+    "p4d.", "p4de.",
+    "p5.", "p5e.", "p5en.",
+    "p6-",
+    "g4dn.", "g4ad.",
+    "g5.", "g5g.",
+    "g6.", "g6e.",
+)
 
 _AWS_INSTANCE_GPU_MAP = {
     # p2 — Tesla K80
@@ -1181,10 +1189,51 @@ _AWS_INSTANCE_GPU_MAP = {
 }
 
 
+def _fetch_aws_spot_prices():
+    """
+    Fetch current EC2 spot prices for GPU instances in us-east-1.
+    Returns dict of instance_type → spot $/hr (latest price only).
+    Uses ec2:DescribeSpotPriceHistory — no extra IAM needed beyond
+    the Lambda's default EC2 read permissions.
+    """
+    try:
+        ec2 = boto3.client("ec2", region_name="us-east-1")
+    except Exception as e:
+        print(f"  AWS spot pricing client error: {e}")
+        return {}
+
+    spot_prices = {}  # instance_type → latest spot $/hr
+    try:
+        paginator = ec2.get_paginator("describe_spot_price_history")
+        # Fetch only Linux/UNIX spot prices for GPU instance types
+        instance_types = list(_AWS_INSTANCE_GPU_MAP.keys())
+        # API accepts max 64 instance types per call, batch if needed
+        for i in range(0, len(instance_types), 64):
+            batch = instance_types[i:i + 64]
+            pages = paginator.paginate(
+                InstanceTypes=batch,
+                ProductDescriptions=["Linux/UNIX"],
+                # Empty StartTime = latest prices only
+            )
+            for page in pages:
+                for record in page.get("SpotPriceHistory", []):
+                    itype = record["InstanceType"]
+                    price = float(record["SpotPrice"])
+                    # Keep the latest (lowest) price per instance type
+                    if itype not in spot_prices or price < spot_prices[itype]:
+                        spot_prices[itype] = price
+    except Exception as e:
+        print(f"  AWS spot pricing fetch error: {e}")
+
+    print(f"  AWS spot: {len(spot_prices)} instance types with spot prices")
+    return spot_prices
+
+
 def fetch_aws_gpus():
     """
-    Fetch AWS EC2 GPU on-demand pricing via the boto3 Pricing API.
-    Requires pricing:GetProducts permission on the Lambda role.
+    Fetch AWS EC2 GPU on-demand + spot pricing.
+    On-demand: via boto3 Pricing API (pricing:GetProducts).
+    Spot: via EC2 DescribeSpotPriceHistory (ec2:DescribeSpotPriceHistory).
     Returns per-GPU hourly price for key GPU instance families.
     """
     try:
@@ -1233,39 +1282,56 @@ def fetch_aws_gpus():
         print("  AWS: no GPU pricing returned (check pricing:GetProducts IAM permission)")
         return []
 
+    # Fetch spot prices
+    spot_prices = _fetch_aws_spot_prices()
+
     # Aggregate per GPU model using the instance map
     gpu_groups = {}
-    for itype, instance_price in instance_prices.items():
+    for itype in set(list(instance_prices.keys()) + list(spot_prices.keys())):
         gpu_info = _AWS_INSTANCE_GPU_MAP.get(itype)
         if not gpu_info:
             continue
         gpu_name, vram, gpu_count = gpu_info
-        price_per_gpu = instance_price / gpu_count
 
         if gpu_name not in gpu_groups:
-            gpu_groups[gpu_name] = {"vram_gb": vram, "prices": []}
-        gpu_groups[gpu_name]["prices"].append(price_per_gpu)
+            gpu_groups[gpu_name] = {"vram_gb": vram, "demand": [], "spot": []}
+
+        if itype in instance_prices:
+            gpu_groups[gpu_name]["demand"].append(instance_prices[itype] / gpu_count)
+        if itype in spot_prices:
+            gpu_groups[gpu_name]["spot"].append(spot_prices[itype] / gpu_count)
 
     results = []
     for gpu_name, gdata in gpu_groups.items():
-        prices = gdata["prices"]
-        if not prices:
+        demand = gdata["demand"]
+        spot = gdata["spot"]
+        all_prices = demand + spot
+        if not all_prices:
             continue
+
+        pricing = {
+            "min": min(all_prices),
+            "avg": sum(all_prices) / len(all_prices),
+            "max": max(all_prices),
+        }
+        if demand:
+            pricing["demand_min"] = min(demand)
+            pricing["demand_avg"] = sum(demand) / len(demand)
+        if spot:
+            pricing["spot_min"] = min(spot)
+            pricing["spot_avg"] = sum(spot) / len(spot)
+
         results.append({
-            "name":        gpu_name,
-            "vram_gb":     gdata["vram_gb"],
-            "total_offers": len(prices),
-            "pricing": {
-                "min":        min(prices),
-                "avg":        sum(prices) / len(prices),
-                "max":        max(prices),
-                "demand_min": min(prices),
-                "demand_avg": sum(prices) / len(prices),
-            },
+            "name":         gpu_name,
+            "vram_gb":      gdata["vram_gb"],
+            "total_offers": len(all_prices),
+            "demand_offers": len(demand),
+            "spot_offers":  len(spot),
+            "pricing":      pricing,
         })
 
     results.sort(key=lambda x: x["name"])
-    print(f"  AWS: {len(results)} GPU types from {len(instance_prices)} instance prices")
+    print(f"  AWS: {len(results)} GPU types from {len(instance_prices)} on-demand + {len(spot_prices)} spot prices")
     return results
 
 
@@ -2228,13 +2294,15 @@ def update_gpu_rollups(gpu_snapshot, today):
         "demand_avg": "demand_avg",
     })
 
-    # AWS EC2 — on-demand only (spot not yet implemented)
+    # AWS EC2 — on-demand + spot pricing
     _write_provider_rollup("aws", gpu_snapshot.get("aws", {}).get("gpus", []), today, {
         "min":        "min",
         "avg":        "avg",
         "max":        "max",
         "demand_min": "demand_min",
         "demand_avg": "demand_avg",
+        "spot_min":   "spot_min",
+        "spot_avg":   "spot_avg",
     })
 
     # Thunder Compute — on-demand pricing (prototyping vs production tiers)

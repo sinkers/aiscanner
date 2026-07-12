@@ -897,6 +897,36 @@ class TestProviderInventory(unittest.TestCase):
         )
 
 
+class TestAwsInstanceFamilyFilter(unittest.TestCase):
+    """Verify _AWS_GPU_FAMILIES matches all instance types in _AWS_INSTANCE_GPU_MAP."""
+
+    def test_all_instance_types_match_family_filter(self):
+        """Every instance type in the GPU map must pass the family prefix filter."""
+        for itype in handler._AWS_INSTANCE_GPU_MAP:
+            with self.subTest(instance_type=itype):
+                matches = any(itype.startswith(f) for f in handler._AWS_GPU_FAMILIES)
+                self.assertTrue(
+                    matches,
+                    f"Instance type '{itype}' does not match any prefix in "
+                    f"_AWS_GPU_FAMILIES — add its family prefix"
+                )
+
+    def test_known_gpu_families_present(self):
+        """Key GPU instance families must be in the filter."""
+        # Map of family prefix → representative instance type
+        must_have = {
+            "p4d.": "A100 40GB",
+            "p5.": "H100",
+            "p5e.": "H200",
+            "g4dn.": "T4",
+            "g5.": "A10G",
+            "g6e.": "L40S",
+        }
+        for prefix, gpu in must_have.items():
+            with self.subTest(family=prefix, gpu=gpu):
+                self.assertIn(prefix, handler._AWS_GPU_FAMILIES)
+
+
 class TestProviderInventoryLive(unittest.TestCase):
     """Verify the live deployment has all expected providers.
 
