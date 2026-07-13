@@ -1164,8 +1164,9 @@ _AWS_INSTANCE_GPU_MAP = {
     "p5.48xlarge": ("H100 80GB", 80, 8),
     # p5e — H200
     "p5e.48xlarge": ("H200 141GB", 141, 8),
-    # p6 — B200
+    # p6 — B200, B300
     "p6-b200.48xlarge": ("B200 180GB", 180, 8),
+    "p6-b300.48xlarge": ("B300 288GB", 288, 8),
     # g4dn — T4
     "g4dn.xlarge": ("T4 16GB", 16, 1), "g4dn.2xlarge": ("T4 16GB", 16, 1),
     "g4dn.4xlarge": ("T4 16GB", 16, 1), "g4dn.8xlarge": ("T4 16GB", 16, 1),
@@ -1191,13 +1192,13 @@ _AWS_INSTANCE_GPU_MAP = {
 
 def _fetch_aws_spot_prices():
     """
-    Fetch current EC2 spot prices for GPU instances in us-east-1.
+    Fetch current EC2 spot prices for GPU instances in us-west-2.
     Returns dict of instance_type → spot $/hr (latest price only).
     Uses ec2:DescribeSpotPriceHistory — no extra IAM needed beyond
     the Lambda's default EC2 read permissions.
     """
     try:
-        ec2 = boto3.client("ec2", region_name="us-east-1")
+        ec2 = boto3.client("ec2", region_name="us-west-2")
     except Exception as e:
         print(f"  AWS spot pricing client error: {e}")
         return {}
@@ -1253,7 +1254,7 @@ def fetch_aws_gpus():
                 {"Type": "TERM_MATCH", "Field": "tenancy",            "Value": "Shared"},
                 {"Type": "TERM_MATCH", "Field": "preInstalledSw",     "Value": "NA"},
                 {"Type": "TERM_MATCH", "Field": "capacitystatus",     "Value": "Used"},
-                {"Type": "TERM_MATCH", "Field": "location",           "Value": "US East (N. Virginia)"},
+                {"Type": "TERM_MATCH", "Field": "location",           "Value": "US West (Oregon)"},
             ],
         )
         for page in pages:
