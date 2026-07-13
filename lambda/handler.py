@@ -2141,12 +2141,14 @@ def fetch_hetzner_gpus():
 
 
 # ---------------------------------------------------------------------------
-# GPU pricing collection — Scaleway (static catalog, API requires auth)
+# GPU pricing collection — Scaleway (public API, no auth)
 # ---------------------------------------------------------------------------
 
-# Scaleway GPU pricing (per-GPU per-hour, on-demand)
-# Source: https://www.scaleway.com/en/gpu-instances/
-_SCALEWAY_GPUS = [
+SCALEWAY_API_ZONES = ["fr-par-2"]
+SCALEWAY_API_URL = "https://api.scaleway.com/instance/v1/zones/{zone}/products/servers"
+
+# Static fallback — used if the API is unreachable
+_SCALEWAY_GPUS_FALLBACK = [
     {"name": "NVIDIA L4",          "vram_gb": 24,  "demand": 0.90},
     {"name": "NVIDIA L40S",        "vram_gb": 48,  "demand": 1.68},
     {"name": "NVIDIA H100 PCIe",   "vram_gb": 80,  "demand": 3.27},
@@ -2156,26 +2158,80 @@ _SCALEWAY_GPUS = [
 
 
 def fetch_scaleway_gpus():
-    """Return Scaleway GPU pricing from static catalog.
+    """Fetch Scaleway GPU pricing from their public Instance API.
 
-    Scaleway requires auth for their API. Prices maintained from their
-    published GPU instances page. On-demand only; available in Paris
-    and Warsaw regions.
+    The Scaleway product catalog API requires no authentication.
+    GPU instances are available in fr-par-2 zone. Multi-GPU instances
+    are aggregated to per-GPU pricing. Falls back to static catalog
+    if the API is unreachable.
     """
+    gpu_groups = {}  # gpu_name → {vram_gb, prices: [per-gpu hourly]}
+
+    for zone in SCALEWAY_API_ZONES:
+        url = SCALEWAY_API_URL.format(zone=zone)
+        data = http_get(url)
+        if not data:
+            continue
+
+        servers = data.get("servers", {})
+        for _key, server in servers.items():
+            gpu_count = server.get("gpu", 0)
+            if not gpu_count:
+                continue
+            gpu_info = server.get("gpu_info")
+            if not gpu_info:
+                continue
+
+            manufacturer = gpu_info.get("gpu_manufacturer", "")
+            gpu_name_raw = gpu_info.get("gpu_name", "")
+            gpu_mem_bytes = gpu_info.get("gpu_memory", 0)
+            hourly = server.get("hourly_price", 0)
+
+            if not gpu_name_raw or not hourly:
+                continue
+
+            # Build display name: "NVIDIA H100-SXM" → "NVIDIA H100 SXM"
+            gpu_name = f"{manufacturer} {gpu_name_raw}".replace("-", " ")
+            vram_gb = round(gpu_mem_bytes / (1024 ** 3)) if gpu_mem_bytes else 0
+            price_per_gpu = hourly / gpu_count
+
+            if gpu_name not in gpu_groups:
+                gpu_groups[gpu_name] = {"vram_gb": vram_gb, "prices": []}
+            gpu_groups[gpu_name]["prices"].append(price_per_gpu)
+
+    if not gpu_groups:
+        print("  Scaleway: API unreachable — using static fallback")
+        results = []
+        for gpu in _SCALEWAY_GPUS_FALLBACK:
+            results.append({
+                "name": gpu["name"],
+                "vram_gb": gpu["vram_gb"],
+                "pricing": {
+                    "min": gpu["demand"], "avg": gpu["demand"],
+                    "demand_min": gpu["demand"], "demand_avg": gpu["demand"],
+                },
+            })
+        results.sort(key=lambda x: x["name"])
+        return results
+
     results = []
-    for gpu in _SCALEWAY_GPUS:
+    for gpu_name, gdata in gpu_groups.items():
+        prices = gdata["prices"]
         results.append({
-            "name": gpu["name"],
-            "vram_gb": gpu["vram_gb"],
+            "name":         gpu_name,
+            "vram_gb":      gdata["vram_gb"],
+            "total_offers": len(prices),
             "pricing": {
-                "min":        gpu["demand"],
-                "avg":        gpu["demand"],
-                "demand_min": gpu["demand"],
-                "demand_avg": gpu["demand"],
+                "min":        min(prices),
+                "avg":        sum(prices) / len(prices),
+                "max":        max(prices),
+                "demand_min": min(prices),
+                "demand_avg": sum(prices) / len(prices),
             },
         })
+
     results.sort(key=lambda x: x["name"])
-    print(f"  Scaleway: {len(results)} GPU types (static catalog)")
+    print(f"  Scaleway: {len(results)} GPU types from API ({len(gpu_groups)} models)")
     return results
 
 
@@ -2778,6 +2834,27 @@ def handler(event, context):
                     gpu_snapshot[provider_key] = prev_provider
                     print(f"  {provider_key}: no new data — carrying forward "
                           f"{len(prev_provider['gpus'])} existing entries")
+
+        # Track discontinued GPUs: if a GPU was in the previous snapshot but
+        # is missing from today's fetch, carry it forward with discontinued=True
+        # and last_seen date so the UI can show it as no longer available.
+        if prev is None:
+            prev = s3_get_json("rollups/gpu/latest.json") or {}
+        for provider_key, provider_data in gpu_snapshot.items():
+            if not isinstance(provider_data, dict) or "gpus" not in provider_data:
+                continue
+            prev_provider = prev.get(provider_key, {})
+            prev_gpus = {g["name"]: g for g in prev_provider.get("gpus", [])}
+            current_names = {g["name"] for g in provider_data["gpus"]}
+
+            for gpu_name, prev_gpu in prev_gpus.items():
+                if gpu_name not in current_names:
+                    # GPU was listed before but is gone now — mark as discontinued
+                    discontinued = dict(prev_gpu)
+                    discontinued["discontinued"] = True
+                    discontinued["last_seen"] = prev.get("generated_at", today)
+                    provider_data["gpus"].append(discontinued)
+                    print(f"  {provider_key}: '{gpu_name}' no longer listed — marked discontinued")
 
         s3_put_json(f"snapshots/gpu/{today}.json", gpu_snapshot, cache_seconds=86400)
         s3_put_json("rollups/gpu/latest.json", gpu_snapshot, cache_seconds=3600)

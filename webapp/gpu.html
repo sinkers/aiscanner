@@ -601,6 +601,7 @@
                 const tiers = getTierSummary(pricing);
                 const { gpuClass, variant } = parseGpuClass(g.name);
                 const vram = Math.round(g.vram_gb || g.vram || 0) || 0;
+                const discontinued = !!g.discontinued;
                 out.push({
                     provider: key,
                     providerLabel,
@@ -612,11 +613,15 @@
                     tiers,
                     priceMin: getPriceMin(pricing),
                     priceMax: getPriceMax(pricing),
-                    availability: g.available !== undefined
-                        ? (g.available ? 'Available' : 'Unavailable')
-                        : (g.rentable_offers != null
-                            ? `${g.rentable_offers}/${g.total_offers || '?'} rentable`
-                            : '–'),
+                    discontinued,
+                    lastSeen: g.last_seen || null,
+                    availability: discontinued
+                        ? 'Discontinued'
+                        : g.available !== undefined
+                            ? (g.available ? 'Available' : 'Unavailable')
+                            : (g.rentable_offers != null
+                                ? `${g.rentable_offers}/${g.total_offers || '?'} rentable`
+                                : '–'),
                     raw: g,
                 });
             });
@@ -912,15 +917,19 @@
         // Provider comparison table
         const providerRows = sorted.map(e => {
             const t = e.tiers;
-            const isCheapest = e.priceMin === cheapestPrice && sorted.length > 1;
+            const isCheapest = e.priceMin === cheapestPrice && sorted.length > 1 && !e.discontinued;
             const spotCls = t.spot != null && t.spot === cheapestPrice ? 'cheapest' : '';
             const demandCls = t.demand != null && t.demand === cheapestPrice ? 'cheapest' : '';
-            return `<tr>
+            const rowStyle = e.discontinued ? 'opacity:0.5;text-decoration:line-through' : '';
+            const availHtml = e.discontinued
+                ? `<span style="color:#ef4444">Discontinued</span>`
+                : `${e.availability}`;
+            return `<tr style="${rowStyle}">
                 <td>${badgeHtml(e.providerLabel)}${isCheapest ? ' <span style="color:#4ade80;font-size:0.75em">CHEAPEST</span>' : ''}</td>
                 <td class="${spotCls}" style="font-family:monospace">${t.spot != null ? fmtP(t.spot) : '–'}</td>
                 <td class="${demandCls}" style="font-family:monospace">${t.demand != null ? fmtP(t.demand) : '–'}</td>
                 <td style="font-family:monospace">${t.reserved != null ? fmtP(t.reserved) : '–'}</td>
-                <td style="color:#a0a0a0;font-size:0.9em">${e.availability}</td>
+                <td style="color:#a0a0a0;font-size:0.9em">${availHtml}</td>
             </tr>`;
         }).join('');
 
