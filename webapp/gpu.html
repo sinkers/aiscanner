@@ -369,8 +369,13 @@
         }
         return _providerColorCache[name];
     }
-    function badgeHtml(name) {
+    const _providerUrlCache = {};
+    function badgeHtml(name, url) {
         const c = providerColor(name);
+        if (!url && _providerUrlCache[name]) url = _providerUrlCache[name];
+        if (url) {
+            return `<a href="${esc(url)}" target="_blank" rel="noopener" class="badge" style="background:${c.bg};color:${c.color};border-color:${c.border};text-decoration:none">${esc(name)}</a>`;
+        }
         return `<span class="badge" style="background:${c.bg};color:${c.color};border-color:${c.border}">${esc(name)}</span>`;
     }
 
@@ -590,6 +595,7 @@
         getProviderKeys().forEach(key => {
             const provData = gpuData[key];
             const providerLabel = provData.name || key;
+            if (provData.url) _providerUrlCache[providerLabel] = provData.url;
             (provData.gpus || []).forEach(g => {
                 const pricing = g.pricing || {};
                 const tiers = getTierSummary(pricing);
