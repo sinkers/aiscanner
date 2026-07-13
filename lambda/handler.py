@@ -1818,15 +1818,15 @@ def fetch_jarvislabs_gpus():
 # Note: Paperspace is now part of DigitalOcean
 _PAPERSPACE_GPUS = [
     {"name": "NVIDIA H100",     "vram_gb": 80,  "demand": 5.95},
-    {"name": "NVIDIA A100 80G", "vram_gb": 80,  "demand": 3.18},
+    {"name": "NVIDIA A100 80GB", "vram_gb": 80,  "demand": 3.18},
     {"name": "NVIDIA A6000",    "vram_gb": 48,  "demand": 1.89},
     {"name": "NVIDIA A5000",    "vram_gb": 24,  "demand": 1.38},
     {"name": "NVIDIA A4000",    "vram_gb": 16,  "demand": 0.76},
     {"name": "NVIDIA V100",     "vram_gb": 16,  "demand": 2.30},
     {"name": "NVIDIA P6000",    "vram_gb": 24,  "demand": 1.10},
-    {"name": "NVIDIA RTX5000",  "vram_gb": 16,  "demand": 0.82},
+    {"name": "NVIDIA RTX 5000",  "vram_gb": 16,  "demand": 0.82},
     {"name": "NVIDIA P5000",    "vram_gb": 16,  "demand": 0.78},
-    {"name": "NVIDIA RTX4000",  "vram_gb": 8,   "demand": 0.56},
+    {"name": "NVIDIA RTX 4000",  "vram_gb": 8,   "demand": 0.56},
     {"name": "NVIDIA P4000",    "vram_gb": 8,   "demand": 0.51},
     {"name": "NVIDIA M4000",    "vram_gb": 8,   "demand": 0.45},
 ]
@@ -2150,7 +2150,7 @@ _SCALEWAY_GPUS = [
     {"name": "NVIDIA L40S",        "vram_gb": 48,  "demand": 1.68},
     {"name": "NVIDIA H100 PCIe",   "vram_gb": 80,  "demand": 3.27},
     {"name": "NVIDIA H100 SXM",    "vram_gb": 80,  "demand": 3.61},
-    {"name": "NVIDIA B300 SXM",    "vram_gb": 262, "demand": 8.55},
+    {"name": "NVIDIA B300 SXM",    "vram_gb": 288, "demand": 8.55},
 ]
 
 
