@@ -36,7 +36,7 @@ Compare STT, TTS, and video generation services across providers.
 
 Compare GPU rental costs across cloud providers.
 
-- **Multi-provider comparison** — RunPod, Vast.ai, Lambda Labs, TensorDock, Vultr, Azure, AWS, Oracle Cloud, Google Cloud, CoreWeave, FluidStack, DataCrunch, Jarvis Labs, Thunder Compute, Nova Cloud
+- **Multi-provider comparison** — 25 providers: RunPod, Vast.ai, Lambda Labs, TensorDock, Vultr, Azure, AWS, Oracle Cloud, Google Cloud, CoreWeave, FluidStack, DataCrunch, Jarvis Labs, Thunder Compute, Nova Cloud, Paperspace, SaladCloud, Crusoe, Hyperstack, Nebius, DigitalOcean, OVHcloud, Hetzner, Scaleway, Alibaba Cloud
 - **Pricing tiers** — spot, on-demand, and reserved pricing side by side
 - **Filter by GPU model** — search for specific GPUs (A100, H100, RTX 4090, etc.)
 - **Price trends** — historical pricing charts

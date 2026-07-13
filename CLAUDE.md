@@ -166,6 +166,10 @@ python3 -m llm_providers.openrouter.fetch
 ```bash
 make help                  # List all targets
 
+# Tests
+make test                  # Run all unit + integration tests
+make test-live             # Also verify live deployment data
+
 # Full local data refresh
 make refresh-all           # fetch → map → enrich → report
 
@@ -195,6 +199,23 @@ make configure-gpu-env     # Load GPU keys from .env into SSM
 ## API Token
 
 Set `OPENROUTER_API_TOKEN` in `.env` or export it in your shell. The code requires this env var — there is no fallback. If API calls fail with 401, check your token is set correctly.
+
+## Adding a GPU Provider
+
+When adding a new GPU provider, update ALL of these (tests will fail if you miss one):
+
+1. **`lambda/handler.py`** — add `fetch_<slug>_gpus()` function + static/API catalog
+2. **`lambda/handler.py`** — wire into handler: fetch call, `_provider_results` dict, `gpu_snapshot` dict
+3. **`lambda/handler.py`** — add `_write_provider_rollup()` call in `update_gpu_rollups()`
+4. **`lambda/handler.py`** — add slug to `_all_providers` tuple
+5. **`tests/test_gpu_providers.py`** — add unit test class for the new provider
+6. **`tests/test_gpu_providers.py`** — add to `PROVIDERS` list in `TestProviderConsistency`
+7. **`tests/test_gpu_providers.py`** — add slug to `EXPECTED_PROVIDERS` set and increment `EXPECTED_PROVIDER_COUNT`
+8. **`data/seeds/gpu_providers.json`** — set status to `"implemented"` and update gpu_count/price_range
+9. **`README.md`** — add to the multi-provider list
+10. **`lambda/handler.py`** — update docstring (no-auth providers list)
+
+Run `make test` to verify. Run `make test-live` after deploying to verify production.
 
 ## Important Patterns
 

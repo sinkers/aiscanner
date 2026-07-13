@@ -169,11 +169,16 @@ class PricingStack(Stack):
             )
         )
 
-        # Allow Lambda to fetch AWS EC2 on-demand pricing.
+        # Allow Lambda to fetch AWS EC2 on-demand + spot pricing.
         # pricing:GetProducts is a global service; the resource must be *.
+        # ec2:DescribeSpotPriceHistory returns current spot market rates.
         collector.add_to_role_policy(
             iam.PolicyStatement(
-                actions=["pricing:GetProducts", "pricing:DescribeServices"],
+                actions=[
+                    "pricing:GetProducts",
+                    "pricing:DescribeServices",
+                    "ec2:DescribeSpotPriceHistory",
+                ],
                 resources=["*"],
             )
         )
