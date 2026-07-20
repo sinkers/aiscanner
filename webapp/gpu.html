@@ -910,9 +910,10 @@
         const el = document.getElementById(`detail-${vId}`);
         if (!el) return;
 
-        // Sort entries by cheapest price
-        const sorted = [...entries].sort((a, b) => (a.priceMin ?? 9999) - (b.priceMin ?? 9999));
-        const cheapestPrice = sorted[0]?.priceMin;
+        // Sort entries by cheapest price (active GPUs first)
+        const sorted = [...entries].sort((a, b) => (a.discontinued ? 1 : 0) - (b.discontinued ? 1 : 0) || (a.priceMin ?? 9999) - (b.priceMin ?? 9999));
+        const activeEntries = sorted.filter(e => !e.discontinued);
+        const cheapestPrice = activeEntries[0]?.priceMin;
 
         // Provider comparison table
         const providerRows = sorted.map(e => {

@@ -2184,10 +2184,14 @@ def fetch_scaleway_gpus():
 
             manufacturer = gpu_info.get("gpu_manufacturer", "")
             gpu_name_raw = gpu_info.get("gpu_name", "")
-            gpu_mem_bytes = gpu_info.get("gpu_memory", 0)
-            hourly = server.get("hourly_price", 0)
+            try:
+                gpu_mem_bytes = int(gpu_info.get("gpu_memory", 0) or 0)
+                hourly = float(server.get("hourly_price", 0) or 0)
+                gpu_count = int(gpu_count)
+            except (ValueError, TypeError):
+                continue
 
-            if not gpu_name_raw or not hourly:
+            if not gpu_name_raw or not hourly or not gpu_count:
                 continue
 
             # Build display name: "NVIDIA H100-SXM" → "NVIDIA H100 SXM"
@@ -2849,10 +2853,14 @@ def handler(event, context):
 
             for gpu_name, prev_gpu in prev_gpus.items():
                 if gpu_name not in current_names:
-                    # GPU was listed before but is gone now — mark as discontinued
+                    # GPU was listed before but is gone now — mark as discontinued.
+                    # Preserve the original last_seen if already discontinued;
+                    # otherwise set it to the previous snapshot's timestamp.
                     discontinued = dict(prev_gpu)
                     discontinued["discontinued"] = True
-                    discontinued["last_seen"] = prev.get("generated_at", today)
+                    if not prev_gpu.get("discontinued"):
+                        discontinued["last_seen"] = prev.get("generated_at", today)
+                    # else: keep existing last_seen from prior run
                     provider_data["gpus"].append(discontinued)
                     print(f"  {provider_key}: '{gpu_name}' no longer listed — marked discontinued")
 
