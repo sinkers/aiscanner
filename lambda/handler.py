@@ -2141,12 +2141,14 @@ def fetch_hetzner_gpus():
 
 
 # ---------------------------------------------------------------------------
-# GPU pricing collection — Scaleway (static catalog, API requires auth)
+# GPU pricing collection — Scaleway (public API, no auth)
 # ---------------------------------------------------------------------------
 
-# Scaleway GPU pricing (per-GPU per-hour, on-demand)
-# Source: https://www.scaleway.com/en/gpu-instances/
-_SCALEWAY_GPUS = [
+SCALEWAY_API_ZONES = ["fr-par-2"]
+SCALEWAY_API_URL = "https://api.scaleway.com/instance/v1/zones/{zone}/products/servers"
+
+# Static fallback — used if the API is unreachable
+_SCALEWAY_GPUS_FALLBACK = [
     {"name": "NVIDIA L4",          "vram_gb": 24,  "demand": 0.90},
     {"name": "NVIDIA L40S",        "vram_gb": 48,  "demand": 1.68},
     {"name": "NVIDIA H100 PCIe",   "vram_gb": 80,  "demand": 3.27},
@@ -2156,26 +2158,84 @@ _SCALEWAY_GPUS = [
 
 
 def fetch_scaleway_gpus():
-    """Return Scaleway GPU pricing from static catalog.
+    """Fetch Scaleway GPU pricing from their public Instance API.
 
-    Scaleway requires auth for their API. Prices maintained from their
-    published GPU instances page. On-demand only; available in Paris
-    and Warsaw regions.
+    The Scaleway product catalog API requires no authentication.
+    GPU instances are available in fr-par-2 zone. Multi-GPU instances
+    are aggregated to per-GPU pricing. Falls back to static catalog
+    if the API is unreachable.
     """
+    gpu_groups = {}  # gpu_name → {vram_gb, prices: [per-gpu hourly]}
+
+    for zone in SCALEWAY_API_ZONES:
+        url = SCALEWAY_API_URL.format(zone=zone)
+        data = http_get(url)
+        if not data:
+            continue
+
+        servers = data.get("servers", {})
+        for _key, server in servers.items():
+            gpu_count = server.get("gpu", 0)
+            if not gpu_count:
+                continue
+            gpu_info = server.get("gpu_info")
+            if not gpu_info:
+                continue
+
+            manufacturer = gpu_info.get("gpu_manufacturer", "")
+            gpu_name_raw = gpu_info.get("gpu_name", "")
+            try:
+                gpu_mem_bytes = int(gpu_info.get("gpu_memory", 0) or 0)
+                hourly = float(server.get("hourly_price", 0) or 0)
+                gpu_count = int(gpu_count)
+            except (ValueError, TypeError):
+                continue
+
+            if not gpu_name_raw or not hourly or not gpu_count:
+                continue
+
+            # Build display name: "NVIDIA H100-SXM" → "NVIDIA H100 SXM"
+            gpu_name = f"{manufacturer} {gpu_name_raw}".replace("-", " ")
+            vram_gb = round(gpu_mem_bytes / (1024 ** 3)) if gpu_mem_bytes else 0
+            price_per_gpu = hourly / gpu_count
+
+            if gpu_name not in gpu_groups:
+                gpu_groups[gpu_name] = {"vram_gb": vram_gb, "prices": []}
+            gpu_groups[gpu_name]["prices"].append(price_per_gpu)
+
+    if not gpu_groups:
+        print("  Scaleway: API unreachable — using static fallback")
+        results = []
+        for gpu in _SCALEWAY_GPUS_FALLBACK:
+            results.append({
+                "name": gpu["name"],
+                "vram_gb": gpu["vram_gb"],
+                "pricing": {
+                    "min": gpu["demand"], "avg": gpu["demand"],
+                    "demand_min": gpu["demand"], "demand_avg": gpu["demand"],
+                },
+            })
+        results.sort(key=lambda x: x["name"])
+        return results
+
     results = []
-    for gpu in _SCALEWAY_GPUS:
+    for gpu_name, gdata in gpu_groups.items():
+        prices = gdata["prices"]
         results.append({
-            "name": gpu["name"],
-            "vram_gb": gpu["vram_gb"],
+            "name":         gpu_name,
+            "vram_gb":      gdata["vram_gb"],
+            "total_offers": len(prices),
             "pricing": {
-                "min":        gpu["demand"],
-                "avg":        gpu["demand"],
-                "demand_min": gpu["demand"],
-                "demand_avg": gpu["demand"],
+                "min":        min(prices),
+                "avg":        sum(prices) / len(prices),
+                "max":        max(prices),
+                "demand_min": min(prices),
+                "demand_avg": sum(prices) / len(prices),
             },
         })
+
     results.sort(key=lambda x: x["name"])
-    print(f"  Scaleway: {len(results)} GPU types (static catalog)")
+    print(f"  Scaleway: {len(results)} GPU types from API ({len(gpu_groups)} models)")
     return results
 
 
@@ -2739,31 +2799,31 @@ def handler(event, context):
     if any_data:
         gpu_snapshot = {
             "generated_at": datetime.now(timezone.utc).isoformat(),
-            "runpod":          {"name": "RunPod",           "total_gpus": len(runpod_gpus),          "gpus": runpod_gpus},
-            "vast":            {"name": "Vast.ai",          "total_gpus": len(vast_gpus),            "gpus": vast_gpus},
-            "lambda_labs":     {"name": "Lambda Labs",      "total_gpus": len(lambdalabs_gpus),      "gpus": lambdalabs_gpus},
-            "tensordock":      {"name": "TensorDock",       "total_gpus": len(tensordock_gpus),      "gpus": tensordock_gpus},
-            "vultr":           {"name": "Vultr",            "total_gpus": len(vultr_gpus),           "gpus": vultr_gpus},
-            "azure":           {"name": "Azure",            "total_gpus": len(azure_gpus),           "gpus": azure_gpus},
-            "oracle":          {"name": "Oracle Cloud",     "total_gpus": len(oracle_gpus),          "gpus": oracle_gpus},
-            "aws":             {"name": "AWS EC2",          "total_gpus": len(aws_gpus),             "gpus": aws_gpus},
-            "thunder_compute": {"name": "Thunder Compute",  "total_gpus": len(thunder_compute_gpus), "gpus": thunder_compute_gpus},
-            "nova_cloud":      {"name": "Nova Cloud",       "total_gpus": len(nova_cloud_gpus),      "gpus": nova_cloud_gpus},
-            "google_cloud":    {"name": "Google Cloud",     "total_gpus": len(google_cloud_gpus),    "gpus": google_cloud_gpus},
-            "coreweave":       {"name": "CoreWeave",        "total_gpus": len(coreweave_gpus),       "gpus": coreweave_gpus},
-            "fluidstack":      {"name": "FluidStack",       "total_gpus": len(fluidstack_gpus),      "gpus": fluidstack_gpus},
-            "datacrunch":      {"name": "DataCrunch",       "total_gpus": len(datacrunch_gpus),      "gpus": datacrunch_gpus},
-            "jarvis_labs":     {"name": "Jarvis Labs",      "total_gpus": len(jarvis_labs_gpus),     "gpus": jarvis_labs_gpus},
-            "paperspace":      {"name": "Paperspace",       "total_gpus": len(paperspace_gpus),      "gpus": paperspace_gpus},
-            "salad":           {"name": "SaladCloud",       "total_gpus": len(salad_gpus),           "gpus": salad_gpus},
-            "crusoe":          {"name": "Crusoe",           "total_gpus": len(crusoe_gpus),          "gpus": crusoe_gpus},
-            "hyperstack":      {"name": "Hyperstack",       "total_gpus": len(hyperstack_gpus),      "gpus": hyperstack_gpus},
-            "nebius":          {"name": "Nebius",           "total_gpus": len(nebius_gpus),           "gpus": nebius_gpus},
-            "digitalocean":    {"name": "DigitalOcean",     "total_gpus": len(digitalocean_gpus),    "gpus": digitalocean_gpus},
-            "ovh":             {"name": "OVHcloud",         "total_gpus": len(ovh_gpus),             "gpus": ovh_gpus},
-            "hetzner":         {"name": "Hetzner",          "total_gpus": len(hetzner_gpus),         "gpus": hetzner_gpus},
-            "scaleway":        {"name": "Scaleway",         "total_gpus": len(scaleway_gpus),        "gpus": scaleway_gpus},
-            "alibaba":         {"name": "Alibaba Cloud",    "total_gpus": len(alibaba_gpus),         "gpus": alibaba_gpus},
+            "runpod":          {"name": "RunPod",           "url": "https://www.runpod.io/pricing",                                "total_gpus": len(runpod_gpus),          "gpus": runpod_gpus},
+            "vast":            {"name": "Vast.ai",          "url": "https://cloud.vast.ai/create/",                                "total_gpus": len(vast_gpus),            "gpus": vast_gpus},
+            "lambda_labs":     {"name": "Lambda Labs",      "url": "https://lambda.ai/pricing",                                    "total_gpus": len(lambdalabs_gpus),      "gpus": lambdalabs_gpus},
+            "tensordock":      {"name": "TensorDock",       "url": "https://www.tensordock.com/gpu-cloud",                         "total_gpus": len(tensordock_gpus),      "gpus": tensordock_gpus},
+            "vultr":           {"name": "Vultr",            "url": "https://www.vultr.com/products/cloud-gpu/",                    "total_gpus": len(vultr_gpus),           "gpus": vultr_gpus},
+            "azure":           {"name": "Azure",            "url": "https://azure.microsoft.com/en-us/pricing/details/virtual-machines/linux/", "total_gpus": len(azure_gpus), "gpus": azure_gpus},
+            "oracle":          {"name": "Oracle Cloud",     "url": "https://www.oracle.com/cloud/compute/gpu/pricing/",            "total_gpus": len(oracle_gpus),          "gpus": oracle_gpus},
+            "aws":             {"name": "AWS EC2",          "url": "https://aws.amazon.com/ec2/pricing/on-demand/",                "total_gpus": len(aws_gpus),             "gpus": aws_gpus},
+            "thunder_compute": {"name": "Thunder Compute",  "url": "https://www.thundercompute.com/pricing",                       "total_gpus": len(thunder_compute_gpus), "gpus": thunder_compute_gpus},
+            "nova_cloud":      {"name": "Nova Cloud",       "url": "https://novacloud.com/pricing/",                               "total_gpus": len(nova_cloud_gpus),      "gpus": nova_cloud_gpus},
+            "google_cloud":    {"name": "Google Cloud",     "url": "https://cloud.google.com/gpu/pricing",                         "total_gpus": len(google_cloud_gpus),    "gpus": google_cloud_gpus},
+            "coreweave":       {"name": "CoreWeave",        "url": "https://www.coreweave.com/gpu-cloud-pricing",                  "total_gpus": len(coreweave_gpus),       "gpus": coreweave_gpus},
+            "fluidstack":      {"name": "FluidStack",       "url": "https://www.fluidstack.io/pricing",                            "total_gpus": len(fluidstack_gpus),      "gpus": fluidstack_gpus},
+            "datacrunch":      {"name": "DataCrunch",       "url": "https://datacrunch.io/products",                               "total_gpus": len(datacrunch_gpus),      "gpus": datacrunch_gpus},
+            "jarvis_labs":     {"name": "Jarvis Labs",      "url": "https://jarvislabs.ai/pricing",                                "total_gpus": len(jarvis_labs_gpus),     "gpus": jarvis_labs_gpus},
+            "paperspace":      {"name": "Paperspace",       "url": "https://www.paperspace.com/pricing",                           "total_gpus": len(paperspace_gpus),      "gpus": paperspace_gpus},
+            "salad":           {"name": "SaladCloud",       "url": "https://salad.com/pricing",                                    "total_gpus": len(salad_gpus),           "gpus": salad_gpus},
+            "crusoe":          {"name": "Crusoe",           "url": "https://crusoe.ai/cloud/pricing/",                             "total_gpus": len(crusoe_gpus),          "gpus": crusoe_gpus},
+            "hyperstack":      {"name": "Hyperstack",       "url": "https://www.hyperstack.cloud/gpu-pricing",                     "total_gpus": len(hyperstack_gpus),      "gpus": hyperstack_gpus},
+            "nebius":          {"name": "Nebius",           "url": "https://nebius.com/pricing",                                    "total_gpus": len(nebius_gpus),          "gpus": nebius_gpus},
+            "digitalocean":    {"name": "DigitalOcean",     "url": "https://www.digitalocean.com/pricing/gpu-droplets",            "total_gpus": len(digitalocean_gpus),    "gpus": digitalocean_gpus},
+            "ovh":             {"name": "OVHcloud",         "url": "https://www.ovhcloud.com/en/public-cloud/prices/",             "total_gpus": len(ovh_gpus),             "gpus": ovh_gpus},
+            "hetzner":         {"name": "Hetzner",          "url": "https://www.hetzner.com/dedicated-rootserver/",                "total_gpus": len(hetzner_gpus),         "gpus": hetzner_gpus},
+            "scaleway":        {"name": "Scaleway",         "url": "https://www.scaleway.com/en/gpu-instances/",                   "total_gpus": len(scaleway_gpus),        "gpus": scaleway_gpus},
+            "alibaba":         {"name": "Alibaba Cloud",    "url": "https://www.alibabacloud.com/product/gpu",                     "total_gpus": len(alibaba_gpus),         "gpus": alibaba_gpus},
         }
 
         # Carry forward last known data for any provider that returned nothing
@@ -2778,6 +2838,31 @@ def handler(event, context):
                     gpu_snapshot[provider_key] = prev_provider
                     print(f"  {provider_key}: no new data — carrying forward "
                           f"{len(prev_provider['gpus'])} existing entries")
+
+        # Track discontinued GPUs: if a GPU was in the previous snapshot but
+        # is missing from today's fetch, carry it forward with discontinued=True
+        # and last_seen date so the UI can show it as no longer available.
+        if prev is None:
+            prev = s3_get_json("rollups/gpu/latest.json") or {}
+        for provider_key, provider_data in gpu_snapshot.items():
+            if not isinstance(provider_data, dict) or "gpus" not in provider_data:
+                continue
+            prev_provider = prev.get(provider_key, {})
+            prev_gpus = {g["name"]: g for g in prev_provider.get("gpus", [])}
+            current_names = {g["name"] for g in provider_data["gpus"]}
+
+            for gpu_name, prev_gpu in prev_gpus.items():
+                if gpu_name not in current_names:
+                    # GPU was listed before but is gone now — mark as discontinued.
+                    # Preserve the original last_seen if already discontinued;
+                    # otherwise set it to the previous snapshot's timestamp.
+                    discontinued = dict(prev_gpu)
+                    discontinued["discontinued"] = True
+                    if not prev_gpu.get("discontinued"):
+                        discontinued["last_seen"] = prev.get("generated_at", today)
+                    # else: keep existing last_seen from prior run
+                    provider_data["gpus"].append(discontinued)
+                    print(f"  {provider_key}: '{gpu_name}' no longer listed — marked discontinued")
 
         s3_put_json(f"snapshots/gpu/{today}.json", gpu_snapshot, cache_seconds=86400)
         s3_put_json("rollups/gpu/latest.json", gpu_snapshot, cache_seconds=3600)

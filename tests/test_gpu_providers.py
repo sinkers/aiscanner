@@ -419,11 +419,11 @@ class TestHetznerGpus(unittest.TestCase):
 
 
 class TestScalewayGpus(unittest.TestCase):
-    """Test Scaleway static catalog."""
+    """Test Scaleway GPU pricing (dynamic API with static fallback)."""
 
-    def test_returns_expected_count(self):
+    def test_returns_gpus(self):
         results = handler.fetch_scaleway_gpus()
-        self.assertEqual(len(results), 5)
+        self.assertGreaterEqual(len(results), 3, "Should return at least 3 GPU types")
 
     def test_all_have_required_fields(self):
         for gpu in handler.fetch_scaleway_gpus():
@@ -432,11 +432,10 @@ class TestScalewayGpus(unittest.TestCase):
             self.assertIn("pricing", gpu)
             self.assertGreater(gpu["vram_gb"], 0)
 
-    def test_demand_only_no_spot(self):
+    def test_demand_pricing_present(self):
         for gpu in handler.fetch_scaleway_gpus():
             p = gpu["pricing"]
             self.assertIn("demand_min", p)
-            self.assertNotIn("spot_min", p)
 
     def test_sorted_by_name(self):
         results = handler.fetch_scaleway_gpus()
